@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Skill runtime / scratch state (never committed)
+.state/
+.impeccable/
+*.log
+session-recall-*/
+cross-model-out/
+
+# Local env / secrets
+local.env
+.env
+*.token
