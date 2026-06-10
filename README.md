@@ -11,6 +11,7 @@ A portable, restorable backup of locally-authored [Claude Code](https://docs.cla
 | **frontend-taste** | Designs and iterates production-grade frontend interfaces — command system, register model, anti-slop mechanics, live browser iteration. A consolidation of upstream work; see [`skills/frontend-taste/NOTICE.md`](skills/frontend-taste/NOTICE.md). |
 | **safety-scoping** | Session guardrails: `careful` (warn before destructive shell), `freeze` (restrict edits to a directory), `guard` (both). State-gated PreToolUse hooks. |
 | **session-recall** | Searches prior coding-agent sessions (Claude Code + Codex) to answer "what was tried / decided before" — script-first, never loads raw transcripts into context. |
+| **plan-pressure-test** | Pressure-tests a product idea / feature / plan before build effort: six forcing questions (demand-reality, status-quo, desperate-specificity, narrowest-wedge, observation, future-fit) → one of four scope modes; surfaces only genuine taste decisions to the operator. Adapts gstack's interrogation structure; see [`NOTICE.md`](NOTICE.md). |
 
 ## Restore
 

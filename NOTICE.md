@@ -47,7 +47,12 @@ SOFTWARE.
 
 ## gstack — MIT
 
-`safety-scoping` adapts the `careful` / `freeze` / `guard` guardrail pattern from:
+`safety-scoping` adapts the `careful` / `freeze` / `guard` guardrail pattern,
+and `plan-pressure-test` lifts the forcing-interrogation structure and
+scope-mode ladder from the `office-hours` / `plan-ceo-review` / `autoplan`
+skills (re-voiced from the YC/founder framing; the
+don't-make-the-operator-adjudicate-determinate-calls principle comes from
+`autoplan`), from:
 
 > gstack — https://github.com/garrytan/gstack
 
