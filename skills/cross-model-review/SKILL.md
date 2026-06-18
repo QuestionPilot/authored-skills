@@ -276,9 +276,19 @@ agy --sandbox -p "<preamble> Key claims, tables, charts. Page-numbered." @/path/
 # Whole-repo / multi-dir scan
 agy --sandbox -p "<preamble> Scan <abs path>. file:line list grouped by directory." < /dev/null
 
-# Text critique via Gemini — ATTACH the scanned packet (agy reads the @-file, not stdin);
-# the packet must live in a SPACE-FREE dir (a space in an @-path silently sends NO content).
-agy --sandbox --print-timeout=120s -p "<preamble> <prompt>" @"$rundir/input-diff.patch" < /dev/null
+# Text critique via Gemini — the RELIABLE recipe. The bare @-attach form (bottom)
+# is FLAKY for text: it times out under --sandbox and sends NOTHING if the @-path
+# has a space. Instead put the packet in a SPACE-FREE dir, grant it with --add-dir,
+# and NAME the file for agy to read. Generous --print-timeout (text review reasons
+# for minutes, not the 120s an image needs).
+agy --sandbox --add-dir "$rundir" --print-timeout=300s \
+  -p "<preamble> <prompt> The diff is the file input-diff.patch in the directory you have been given — read that one file and review it." < /dev/null
+# Timed out ("Error: timed out waiting for response")? --sandbox is blocking the
+# read — escalate (no-go preamble STILL prepended, never drop the INSTRUCT guard)
+# and bump the timeout:
+agy --dangerously-skip-permissions --add-dir "$rundir" --print-timeout=400s \
+  -p "<preamble> <prompt> Read the file input-diff.patch in that directory and review it." < /dev/null
+# Legacy / unreliable (kept only to name the trap): agy --sandbox -p "…" @"$rundir/input-diff.patch" < /dev/null
 
 # Multi-image (≥3 shots) — --add-dir a SPACE-FREE staging dir, NEVER @-cram.
 imgdir=/tmp/visrev; mkdir -p "$imgdir"; cp /path/shots/*.png "$imgdir"/
@@ -295,7 +305,15 @@ agy --sandbox --add-dir "$imgdir" --print-timeout=120s \
    (`/tmp/…`, or the run dir under `$CROSS_MODEL_OUT_DIR`) — the operator repo lives
    under a path with a space, so this bites.
 3. **`--print-timeout` caps the model wait, not the upload;** pipe `< /dev/null` for
-   stdin on headless runs.
+   stdin on headless runs. For a TEXT diff review use **≥300s** — text reasons far
+   longer than the 120s an image needs, and a too-short cap reads as a "timeout".
+4. **Text-packet review → `--add-dir` + NAME the file, never `@`-attach.** Both
+   `@"…/input-diff.patch"` and `--add-dir` *under `--sandbox`* have **timed out**
+   ("Error: timed out waiting for response") on a plain text diff (confirmed twice —
+   this run + the prior Tolaria eval). Reliable path: `--add-dir <space-free dir>` +
+   a prompt that names the file to read + `--print-timeout=300s`; if it STILL times
+   out, escalate to `--dangerously-skip-permissions` (no-go preamble still
+   prepended). Treat the bare `@`-attach as a trap, not the default.
 
 Guardrail split: `--sandbox` ENFORCEs (terminal/write restrictions); the no-go
 preamble INSTRUCTs (disclosure / no-roam). If `--sandbox` ever blocks an attachment
@@ -350,6 +368,17 @@ $CROSS_MODEL_OUT_DIR/<YYYY-MM-DD>-<slug>/
 
 Append one line per run to `$CROSS_MODEL_OUT_DIR/log.md` — the compounding ledger.
 `CROSS_MODEL_OUT_DIR` defaults to `$HOME/cross-model-out`.
+
+**Reading back the captured output — two traps that masquerade as "empty result".**
+- **`grep -a`, always.** Critic transcripts and any captured PowerShell logs carry
+  ANSI colour escapes; plain `grep`/`rg` treats such a file as **binary** and
+  silently suppresses matches (you see nothing and wrongly conclude the run failed).
+  Use `grep -a` — or strip ANSI first — on every `*-review.md` and PS log.
+- **Codex findings live at the TAIL.** `codex exec` streams its reasoning trace,
+  SessionStart-hook lines, and an occasional `failed to load skill …` warning *before*
+  the answer; the real **Findings / Blocking risks / Missing tests** are at the END
+  (after the final `codex` marker). Extract the tail (`tail -n`), don't parse the
+  whole transcript. agy returns clean markdown — nothing to strip.
 
 ## Announcement protocol
 
