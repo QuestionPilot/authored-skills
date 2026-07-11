@@ -2,21 +2,18 @@
 name: plan-pressure-test
 description: >-
   Pressure-test a product idea, feature, plan, or client engagement BEFORE
-  committing build effort. Runs a six-question forcing interrogation
-  (demand-reality, status-quo, desperate-specificity, narrowest-wedge,
-  observation, future-fit), recommends one of four scope modes (Expansion /
-  Selective Expansion / Hold Scope / Reduction), and surfaces only the genuine
-  taste decisions for the operator to make — resolving the mechanical calls
-  itself. Use whenever the operator is deciding what to build, scoping a feature
-  or product, prioritizing a roadmap, planning a client engagement or course
-  module, or asking things like "is this worth building", "how should I scope
-  this", "which of these should I build first", "should I add X", "am I
-  overbuilding this", "is there real demand", or otherwise weighing whether/what
-  to build when a candidate idea already exists. Especially apt for Question
-  Pilot product decisions, AI Agency Course content, and client/product work.
-  NOT for executing an already-decided build, code review, debugging,
-  implementation planning of a settled spec, or the open-ended "where do I even
-  start with AI / map my tools" greenfield case (that is silver-platter).
+  committing build effort. Runs a six-question forcing interrogation,
+  recommends one of four scope modes (Expansion / Selective Expansion / Hold
+  Scope / Reduction), and surfaces only the genuine taste decisions for the
+  operator. Use when deciding what to build, scoping a feature or product,
+  prioritizing a roadmap, planning a client engagement or course module, or
+  asking "is this worth building", "how should I scope this", "which should I
+  build first", "should I add X", "am I overbuilding this", "is there real
+  demand". Especially apt for Question Pilot product decisions, AI Agency
+  Course content, and client work. NOT for executing an already-decided build,
+  code review, debugging, implementation planning of a settled spec, or the
+  open-ended greenfield "where do I even start with AI" case (that is
+  silver-platter).
 allowed-tools:
   - Read
   - AskUserQuestion

@@ -102,8 +102,12 @@ redacted snippet; do NOT pipe), `2` error (missing args/input/grep) — **fail
 closed**, treat `2` like `1`. Patterns (assembled at runtime from non-matching
 halves so this file doesn't self-trip): provider API-key prefixes + a long tail
 (`sk-…`, catches Anthropic + OpenAI keys), chat-platform tokens, version-control
-tokens, cloud access keys, length-thresholded high-entropy hex. Tunable; false
-positives allowlisted at the call site, real hits force a credential rotation.
+tokens, cloud access keys, length-thresholded high-entropy hex. Full-line-anchored
+git patch-header shapes (commit/index/From/Merge) are excluded from the hex pattern
+only, so git show / diff / format-patch packets pass unstripped; a hex secret
+formatted exactly as such a header line is an accepted residual — this is a
+tripwire, not DLP. Tunable; false positives allowlisted at the call site, real
+hits force a credential rotation.
 
 **Self-test** by planting a runtime-constructed credential sentinel (must block) +
 a benign diff (must pass). **The scan is a credential tripwire only** — not
@@ -281,6 +285,8 @@ agy --sandbox -p "<preamble> Scan <abs path>. file:line list grouped by director
 # has a space. Instead put the packet in a SPACE-FREE dir, grant it with --add-dir,
 # and NAME the file for agy to read. Generous --print-timeout (text review reasons
 # for minutes, not the 120s an image needs).
+# PANEL runs: grant the per-critic packet dir ("$rundir/gemini"), never the shared
+# "$rundir" — a concurrent panelist's review is readable there (see panel lane).
 agy --sandbox --add-dir "$rundir" --print-timeout=300s \
   -p "<preamble> <prompt> The diff is the file input-diff.patch in the directory you have been given — read that one file and review it." < /dev/null
 # Timed out ("Error: timed out waiting for response")? --sandbox is blocking the
@@ -310,7 +316,7 @@ agy --sandbox --add-dir "$imgdir" --print-timeout=120s \
 4. **Text-packet review → `--add-dir` + NAME the file, never `@`-attach.** Both
    `@"…/input-diff.patch"` and `--add-dir` *under `--sandbox`* have **timed out**
    ("Error: timed out waiting for response") on a plain text diff (confirmed twice —
-   this run + the prior Tolaria eval). Reliable path: `--add-dir <space-free dir>` +
+   this run + a prior eval run). Reliable path: `--add-dir <space-free dir>` +
    a prompt that names the file to read + `--print-timeout=300s`; if it STILL times
    out, escalate to `--dangerously-skip-permissions` (no-go preamble still
    prepended). Treat the bare `@`-attach as a trap, not the default.
@@ -339,6 +345,28 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
   Tests to verify: <bullet list>
   ```
 
+- **Per-critic packet isolation (hard staging rule).** Panelists run concurrently,
+  and a critic granted the shared run dir can list it and read the other's
+  in-flight review (observed live 2026-07-06: agy, granted `--add-dir "$rundir"`,
+  read `codex-review.md` mid-write — the independence premise broken). Stage a
+  private packet dir per critic and grant ONLY that dir:
+
+  ```bash
+  for critic in codex gemini; do
+    mkdir -p "$rundir/$critic"; cp "$rundir"/input-* "$rundir/$critic/"
+  done
+  # GPT panelist: pipe "$rundir/codex/<packet>" on stdin — no dir grant at all.
+  # Gemini panelist: --add-dir "$rundir/gemini" — NEVER the shared "$rundir".
+  ```
+
+  Review files still land in the shared root via driver-side redirects
+  (`> "$rundir/codex-review.md"`, `> "$rundir/gemini-review.md"`) — the judge
+  reads the root; no critic can. The shared-root `--add-dir "$rundir"` in the
+  specialist text recipe is safe only for single-critic runs. Critics can also
+  read their own cwd, so never invoke one with its working directory inside the
+  shared run dir. Record the evidence in `reconciled.md`: per-critic dirs staged,
+  and the agy transcript shows no listing/read of the other critic's file.
+
 - **Judge / synthesizer** = **Claude** (never a panelist of its own question). Diff
   the answers — where they agree, where they disagree — and adjudicate **by
   evidence, not by averaging** (a wrong-but-confident panelist doesn't pull the
@@ -362,6 +390,7 @@ binary exists but `agy --version` fails, `~/.local/bin` isn't on `PATH`.
 ```
 $CROSS_MODEL_OUT_DIR/<YYYY-MM-DD>-<slug>/
   ├── input-diff.patch — the scanned packet sent to the critic (post-scan; same file the scan gate validated)
+  ├── <critic>/ — panel runs: per-critic packet dir (own copy of input-*); the ONLY dir granted to that critic
   ├── <critic>-review.md — critic output (codex-review.md / gemini-review.md)
   └── reconciled.md    — Claude's synthesis
 ```
