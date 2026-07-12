@@ -1,6 +1,6 @@
 ---
 name: cross-model-review
-description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for video/audio/large-PDF/whole-repo input (specialist lane). Never review your own output — route to a different model family. The two critics are GPT (via the Codex CLI) and Gemini (via the agy CLI), equal first-class peers. Single critic for code review; panel→judge→synthesis for open-ended consensus.
+description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for video/audio/large-PDF/whole-repo input (specialist lanes). Never review your own output — route to a different model family. The three critics are GPT (via the Codex CLI), Gemini (via the agy CLI), and GLM (via Ollama Cloud), equal first-class peers. Single critic for code review; panel→judge→synthesis for open-ended consensus.
 ---
 
 # Cross-Model Review
@@ -10,25 +10,28 @@ review / verify / audit / sanity-check / tear-apart work Claude just produced,
 route to a **different model family** — a model reviewing its own family inherits
 the same blind spots, and that architectural distance is the whole point.
 
-The two critic families are **equal first-class peers**: **GPT** (the `codex` CLI)
-and **Gemini** (the `agy` CLI). There is **no capability hierarchy in either
-direction** — no "senses-only" family, no "stronger coder" family. Selection is by
-**role** (Claude is the driver, so it routes to the other two families) and by
-**lane** (what the task needs), never by a cross-family ranking.
+The three critic families are **equal first-class peers**: **GPT** (the `codex`
+CLI), **Gemini** (the `agy` CLI), and **GLM** (`glm-5.2:cloud` via the `ollama`
+CLI / Ollama Cloud). There is **no capability hierarchy in any direction** — no
+"senses-only" family, no "stronger coder" family. Selection is by **role** (Claude
+is the driver, so it routes to the other families) and by **lane** (what the task
+needs), never by a cross-family ranking. GLM transport + model guide (verified
+recipes, deprecation watch): vault wiki `10-Wiki/Entities/Ollama Cloud + GLM-5.2 —
+CLI & API Guide`.
 
 ## Roles, eligibility, and count
 
 - **Driver** — Claude (this session). Never a critic or panelist of its own output.
-- **Critics** — the two non-Claude families: GPT (Codex) and Gemini (agy).
+- **Critics** — the non-Claude families: GPT (Codex), Gemini (agy), GLM (Ollama Cloud).
 - **Judge / synthesizer** — Claude, for multi-critic lanes. **The driver judges; it
   is never a panelist of its own question** — that is the no-self-review boundary
   restated for the panel case.
 
 **Eligibility (who *may* critique) is separate from count (how many *do*).**
-Eligibility is fixed here: critics = {GPT, Gemini}. **Count is decided by the
+Eligibility is fixed here: critics = {GPT, Gemini, GLM}. **Count is decided by the
 lane** — a verifiable-artifact review (code, diffs) fires **one** critic; an
-open-ended consensus question fires the **panel** (both). Single critic by default;
-the panel only when the economics justify it.
+open-ended consensus question fires the **panel** (all available critics). Single
+critic by default; the panel only when the economics justify it.
 
 ## Triggers — MUST fire on Claude's-own-work review verbs
 
@@ -42,10 +45,12 @@ output. Review that directly; do not route it.
 
 ## The two critique lanes — one critic, different prompt
 
-A code/diff review fires **one** critic — default to **GPT (Codex)**; use Gemini
-(agy) when the input is in its specialist lane (below). Always pipe content via
-stdin; **never** tell a critic to "go read these files" (it can hang on
-approval round-trips). Source the scan gate first (see next section), then:
+A code/diff review fires **one** critic. **GPT (Codex)** and **GLM (Ollama)** are
+both first-choice code critics: GPT for standard diffs, GLM when the packet is
+large (its 1M-token context takes whole-repo text packets no other lane can);
+use Gemini (agy) when the input is in its media specialist lane (below). Always
+pipe content via stdin; **never** tell a critic to "go read these files" (it can
+hang on approval round-trips). Source the scan gate first (see next section), then:
 
 **Confirmation review (default):**
 
@@ -62,6 +67,19 @@ or forced by the risk paths below):
 cat "$rundir/input-diff.patch" | codex exec --skip-git-repo-check -s read-only \
   "<no-go preamble> Adversarial review — construct failure scenarios, don't checklist. Run the four techniques scaled to diff size/risk (see taxonomy): (1) assumption violation, (2) composition failure across boundaries, (3) cascade construction, (4) abuse cases. Each finding: the scenario step-by-step (trigger → path → wrong outcome), file:line, confidence anchor (omit 0/25; 50=advisory, 75=concrete consequence, 100=verifiable AND frequent). Prove it's broken." \
   > "$rundir/codex-review.md"
+```
+
+**GLM equivalents (confirmation or adversarial — same prompts, different pipe).**
+stdin carries preamble + prompt + packet in one stream; this lane has **no file,
+dir, web, or shell access at all** — the packet is the critic's entire world:
+
+```bash
+{ printf '%s\n\n' "<no-go preamble + the same review prompt as above>"; \
+  cat "$rundir/input-diff.patch"; } | \
+  ollama run glm-5.2:cloud --think high --hidethinking > "$rundir/glm-review.md"
+# Clean-capture alternative (no TTY spinner noise in the output): POST the same
+# combined prompt to localhost:11434/api/generate with "stream":false,"think":false —
+# the .response JSON field is the review.
 ```
 
 **Resume invariant — force read-only on every `codex exec resume`.** A fresh
@@ -129,6 +147,10 @@ never means "no network."
 web-enabled critic** (it can exfil piped context through its live web tool; the
 static scan checks the input, not runtime HTTP). A critic needing local context
 runs web-off. Never combine local-read and network-egress tools in one critic.
+**GLM packet lane is structurally isolated:** `ollama run` has no tools of any
+kind — the ENFORCE column is satisfied by construction; only the no-go preamble
+(INSTRUCT) rides along. GLM's *agentic* lane is codex's sandbox with a different
+brain — every codex invariant applies unchanged.
 
 ## Guardrail split + honest sandbox limits
 
@@ -174,9 +196,13 @@ caches/auth-refresh/logs; that's fine — what matters is config *semantics*.
 current flagship tier: **Codex** defers to its configured model but **warn if it
 resolves below the GPT flagship tier**; **agy** resolves the current flagship-tier
 Gemini (verify via `agy models`; a within-Gemini newer-flagship-over-older choice
-is fine — not a cross-family claim). The resolution *mechanism* differs per CLI;
-the *intent* (each lands on its own flagship) does not. Surface the resolved model
-per family in the self-check; warn rather than silently degrade.
+is fine — not a cross-family claim); **GLM** resolves to the newest `glm-*:cloud`
+tag on Ollama Cloud (currently `glm-5.2:cloud`) — Ollama **retires cloud models on
+a schedule**, so a failing `ollama show glm-5.2:cloud` means "check the deprecations
+table at docs.ollama.com/cloud.md and move to the named successor," not an outage.
+The resolution *mechanism* differs per CLI; the *intent* (each lands on its own
+flagship) does not. Surface the resolved model per family in the self-check; warn
+rather than silently degrade.
 
 ## Grading critic findings — anchored rubric + suppression
 
@@ -239,6 +265,8 @@ same edit re-tried with no progress), MUST hand to a critic with full context:
 
 ```bash
 cat <context-bundle> | codex exec --skip-git-repo-check -s read-only "Rescue. Driver tried 2× and failed. Full context attached. Solve from scratch."
+# Any eligible family works — GLM takes the same bundle:
+#   cat <context-bundle> | ollama run glm-5.2:cloud --think high --hidethinking
 ```
 
 Reset only when the test/build passes, the goal changes, or the user says "keep trying."
@@ -328,14 +356,47 @@ no-go preamble still prepended** — never drop the INSTRUCT guard.
 
 Always demand timestamps / page numbers / `file:line` citations — never a flat summary.
 
+## Long-context lane — GLM (Ollama), where the packet outsizes the others
+
+GLM-5.2's **1M-token context** takes whole-repo text packets that would choke the
+other lanes — a **tooling fact, not a ranking**. Text only: GLM has **no vision
+through Ollama**, so media stays with Gemini above.
+
+```bash
+# Whole-repo / huge-packet text review — stage, scan, pipe the whole packet:
+{ printf '%s\n\n' "<no-go preamble: critique clause> <prompt — file:line findings grouped by directory>"; \
+  cat "$rundir/input-repo-packet.txt"; } | \
+  ollama run glm-5.2:cloud --think high --hidethinking > "$rundir/glm-review.md"
+
+# Agentic repo exploration — GLM brain in the codex harness (codex's built-in
+# `ollama` provider); ALL codex sandbox rules apply unchanged (-s read-only,
+# resume pin, no behavior-affecting global writes):
+codex exec --skip-git-repo-check -s read-only \
+  -c model_provider=ollama -c model="glm-5.2:cloud" \
+  "<no-go preamble> <review prompt — cite file:line>" > "$rundir/glm-review.md"
+```
+
+**GLM gotchas (this lane's sharpest edges):**
+1. **Thinking is default-ON** — always pass `--hidethinking` (CLI) or `"think":false`
+   (API), or the reasoning preamble lands in the captured review.
+2. **TTY spinner ANSI noise** pollutes CLI captures — `grep -a` when reading back,
+   or capture via `localhost:11434/api/generate` for clean JSON.
+3. **Cloud tags get retired on a schedule** — self-check probes
+   `ollama show glm-5.2:cloud`; on failure consult the deprecations table
+   (docs.ollama.com/cloud.md) for the named successor.
+4. The packet lane is **structurally tool-free** (nothing to sandbox); the agentic
+   lane is codex's sandbox with a different brain — same invariants, same tail-parse
+   rule for output.
+
 ## Panel → judge → synthesis — explicit consensus only
 
 Only when the user explicitly invokes it ("ask all three", "before I commit",
 "cross-architecture consensus"). This is the panel lane — **diversity-dominated**
 (open-ended question, no CI backstop, the opposite economics from code review).
 
-- **Panelists** = GPT (Codex) + Gemini (agy). Each answers the **same** question
-  independently with structured output:
+- **Panelists** = all available non-driver families: GPT (Codex) + Gemini (agy) +
+  GLM (Ollama). Each answers the **same** question independently with structured
+  output:
 
   ```
   Recommendation: <one line>
@@ -352,11 +413,13 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
   private packet dir per critic and grant ONLY that dir:
 
   ```bash
-  for critic in codex gemini; do
+  for critic in codex gemini glm; do
     mkdir -p "$rundir/$critic"; cp "$rundir"/input-* "$rundir/$critic/"
   done
   # GPT panelist: pipe "$rundir/codex/<packet>" on stdin — no dir grant at all.
   # Gemini panelist: --add-dir "$rundir/gemini" — NEVER the shared "$rundir".
+  # GLM panelist: pipe "$rundir/glm/<packet>" on stdin — structurally isolated
+  # (ollama run has no file access; a dir grant is not even possible).
   ```
 
   Review files still land in the shared root via driver-side redirects
@@ -378,6 +441,9 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
 ```bash
 codex --version 2>&1 | head -1   # GPT critic CLI
 agy --version 2>&1 | head -1     # Gemini critic CLI
+ollama --version 2>&1 | head -1  # GLM critic CLI
+ollama show glm-5.2:cloud >/dev/null 2>&1 || \
+  echo "GLM cloud tag missing/retired — check docs.ollama.com/cloud.md deprecations"
 ```
 
 Surface the resolved flagship-tier model per family alongside the versions. A
@@ -391,7 +457,7 @@ binary exists but `agy --version` fails, `~/.local/bin` isn't on `PATH`.
 $CROSS_MODEL_OUT_DIR/<YYYY-MM-DD>-<slug>/
   ├── input-diff.patch — the scanned packet sent to the critic (post-scan; same file the scan gate validated)
   ├── <critic>/ — panel runs: per-critic packet dir (own copy of input-*); the ONLY dir granted to that critic
-  ├── <critic>-review.md — critic output (codex-review.md / gemini-review.md)
+  ├── <critic>-review.md — critic output (codex-review.md / gemini-review.md / glm-review.md)
   └── reconciled.md    — Claude's synthesis
 ```
 
@@ -407,7 +473,9 @@ Append one line per run to `$CROSS_MODEL_OUT_DIR/log.md` — the compounding led
   SessionStart-hook lines, and an occasional `failed to load skill …` warning *before*
   the answer; the real **Findings / Blocking risks / Missing tests** are at the END
   (after the final `codex` marker). Extract the tail (`tail -n`), don't parse the
-  whole transcript. agy returns clean markdown — nothing to strip.
+  whole transcript — this applies equally to codex-hosted GLM agentic runs. agy
+  returns clean markdown — nothing to strip. GLM CLI captures carry spinner ANSI
+  noise (use `grep -a`, or capture via the local API for clean JSON).
 
 ## Announcement protocol
 
@@ -415,7 +483,7 @@ When this skill fires a route the user did NOT explicitly ask for (risk-path for
 adversarial, failure-counter rescue), announce in one line BEFORE running so the
 user can interrupt. For routes the user explicitly asked for ("check this", "tear it
 apart"), just do it. End cross-model replies with a one-line route trailer:
-`(Routed via cross-model-review → GPT.)`, `→ Gemini.`, or `→ panel.`.
+`(Routed via cross-model-review → GPT.)`, `→ Gemini.`, `→ GLM.`, or `→ panel.`.
 
 ## Stay-asleep rules
 
@@ -437,4 +505,6 @@ single-critic-for-verifiable-artifacts (code, with a CI backstop) vs
 panel-for-open-ended-consensus (diversity-dominated); everything else (scan gate,
 rubric, taxonomy, validator, rescue, risk paths) is supporting machinery. Operator-
 local skill — drop the folder into `$CLAUDE_CONFIG_DIR/skills/cross-model-review/`
-(no compile step).
+(no compile step). 2026-07-10: GLM-5.2 (Ollama Cloud) added as the third equal
+critic family (QUE-427) — packet + long-context + agentic lanes verified live;
+transport guide in the vault wiki.

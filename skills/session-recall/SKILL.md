@@ -11,7 +11,9 @@ all discovery, parsing, filtering, and extraction (script-first architecture —
 `reference/port-notes.md`); the model selects, dispatches a synthesis subagent, and
 presents. Ported from the CE `ce-sessions` skill.
 
-`SR=$CLAUDE_CONFIG_DIR/skills/session-recall` in the commands below.
+`SR=<the absolute path of the directory containing THIS SKILL.md you just read>`
+in the commands below — self-relative, so the same commands work from any
+harness's skill root (the bundled `scripts/` dir is always a direct sibling).
 
 ## Guardrails (always)
 

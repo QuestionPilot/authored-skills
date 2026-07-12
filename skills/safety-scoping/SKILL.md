@@ -5,8 +5,10 @@ description: >-
   restrict file edits to a chosen directory. Use when the user says "be careful",
   "safety mode", "prod mode", "freeze edits to <dir>", "lock editing scope",
   "restrict edits to this folder", "guard mode", "full safety", "lock it down",
-  "unfreeze", "unlock edits", or "safety off". Activates persistent PreToolUse
-  guardrails for the rest of the session via a state file the always-on hooks read.
+  "unfreeze", "unlock edits", or "safety off". Writes shared guardrail state files;
+  on Claude Code two always-on PreToolUse hooks hard-enforce them, on harnesses
+  without those hooks (Codex, Gemini, Hermes) the scoping is advisory session
+  discipline — honor the boundary yourself.
 allowed-tools:
   - Bash
   - Read
@@ -35,6 +37,15 @@ PreToolUse hooks read on every tool call:
 > damage. It cannot stop `eval`, command substitution, variable-computed paths,
 > custom scripts, or language-runtime writes — those are surfaced as `ask` when
 > detectable, allowed otherwise. Don't rely on it against an adversary.
+
+> **Enforcement scope.** The hard gates live in Claude Code only: the two
+> always-on PreToolUse hooks are registered in the Claude config (see the
+> one-time install section below). On any other harness reading this skill
+> (Codex, Gemini, Hermes) no hook runtime reads these state files — activating a
+> mode still writes the shared state (concurrent Claude sessions on this machine
+> will enforce it), but in YOUR session the scoping is advisory: honor the
+> declared boundary and warn-before-destructive discipline yourself. (Operator
+> decision 2026-06-26: no hard-enforcement port outside Claude for attended use.)
 
 > **Concurrency caveat.** Claude Code does not expose the session id to skill-body
 > Bash, so state is **shared across concurrent sessions** under one config dir. If
@@ -92,7 +103,7 @@ rm -f "$STATE_DIR/careful-on" "$STATE_DIR/freeze-dir.txt" && echo "All safety gu
 [ -f "$STATE_DIR/freeze-dir.txt" ] && echo "freeze: $(cat "$STATE_DIR/freeze-dir.txt")" || echo "freeze: off"
 ```
 
-## One-time hook install (operator)
+## One-time hook install (operator — Claude Code only)
 
 The guardrails only fire if the two always-on PreToolUse hooks are registered in
 `$CLAUDE_CONFIG_DIR/settings.json`. They no-op cheaply (a file-existence check)

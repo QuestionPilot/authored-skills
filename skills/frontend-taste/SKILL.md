@@ -28,10 +28,11 @@ Two files, case-insensitive. The loader looks at the project root by default and
 - **PRODUCT.md**: required. Users, brand, tone, anti-references, strategic principles.
 - **DESIGN.md**: optional, strongly recommended. Colors, typography, elevation, components.
 
-Load both in one call:
+Load both in one call (`$SKILL_DIR` = the directory you read this SKILL.md from
+— self-relative, so the same command works from any harness's skill root):
 
 ```bash
-node .claude/skills/frontend-taste/scripts/load-context.mjs
+node "$SKILL_DIR/scripts/load-context.mjs"
 ```
 
 Consume the full JSON output. Never pipe through `head`, `tail`, `grep`, or `jq`. The output's `contextDir` field tells you where the files were resolved from.
@@ -56,7 +57,7 @@ Load the matching reference: [reference/brand.md](reference/brand.md) or [refere
 
 ## Shared design laws
 
-Apply to every design, both registers. Match implementation complexity to the aesthetic vision: maximalism needs elaborate code, minimalism needs precision. Interpret creatively. Vary across projects; never converge on the same choices. Claude is capable of extraordinary work. Don't hold back.
+Apply to every design, both registers. Match implementation complexity to the aesthetic vision: maximalism needs elaborate code, minimalism needs precision. Interpret creatively. Vary across projects; never converge on the same choices. You are capable of extraordinary work. Don't hold back.
 
 ### Color
 
@@ -179,7 +180,7 @@ If the first word is `craft`, setup still runs first, but [reference/craft.md](r
 **Pin** creates a standalone shortcut so `/<command>` invokes `/impeccable <command>` directly. **Unpin** removes it. The script writes to every harness directory present in the project.
 
 ```bash
-node .claude/skills/frontend-taste/scripts/pin.mjs <pin|unpin> <command>
+node "$SKILL_DIR/scripts/pin.mjs" <pin|unpin> <command>
 ```
 
 Valid `<command>` is any command from the table above. Report the script's result concisely. Confirm the new shortcut on success, relay stderr verbatim on error.

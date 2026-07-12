@@ -65,16 +65,41 @@ allmeta="$(CLAUDE_CONFIG_DIR="$CFG" bash "$DISC" 3650 --platform claude --exclud
 check "all-repos scan returns no-cwd session" "nocwd-1" "$allmeta"
 
 # 6. Codex date-nesting: a sessions/YYYY/MM/DD/ tree is discovered
+# NOTE: CODEX_HOME/AGENTS_DIR must be pinned in every discovery invocation —
+# the script honors them (and falls back to the REAL local.env via its own
+# path), so an unpinned run would leak the operator's live sessions in.
 CODEXBASE="$TMP/home/.codex/sessions/2026/06/03"
 mkdir -p "$CODEXBASE"
 cp "$FIX/codex-session.jsonl" "$CODEXBASE/rollout-test.jsonl"
-cout="$(HOME="$TMP/home" bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
+cout="$(HOME="$TMP/home" CODEX_HOME="$TMP/home/.codex" AGENTS_DIR="$TMP/home/.agents" \
+        bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
 check "discovery recurses Codex date-nesting" "rollout-test.jsonl" "$cout"
+
+# 6b. Relocated Codex home: $CODEX_HOME (space path) wins over $HOME/.codex
+RELOC="$TMP/Reloc Dir/.codex/sessions/2026/06/04"
+mkdir -p "$RELOC"
+cp "$FIX/codex-session.jsonl" "$RELOC/rollout-reloc.jsonl"
+rout="$(HOME="$TMP/nohome" CODEX_HOME="$TMP/Reloc Dir/.codex" AGENTS_DIR="$TMP/nohome/.agents" \
+        bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
+check "relocated CODEX_HOME (space path) discovered" "rollout-reloc.jsonl" "$rout"
+
+# 6c. Dedup: CODEX_HOME pointing at the stock $HOME/.codex emits each file once
+dup="$(HOME="$TMP/home" CODEX_HOME="$TMP/home/.codex" AGENTS_DIR="$TMP/home/.agents" \
+       bash "$DISC" 3650 --platform codex --exclude-active-min 0 | grep -c 'rollout-test.jsonl' || true)"
+case "$dup" in 1) ok "dedup: CODEX_HOME==\$HOME/.codex emits once" ;; *) bad "dedup: expected 1 emission, got '$dup'" ;; esac
+
+# 6d. local.env fallback: CODEX_HOME empty in env, declared in a fake local.env
+FR="$TMP/fakerepo"; mkdir -p "$FR"
+printf "CODEX_HOME='%s'\n" "$TMP/Reloc Dir/.codex" > "$FR/local.env"
+lout="$(HOME="$TMP/nohome" CODEX_HOME= AGENTS_DIR= CLAUDE_CONFIG_DIR= AI_CONFIG_DIR="$FR" \
+        bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
+check "local.env fallback resolves relocated CODEX_HOME" "rollout-reloc.jsonl" "$lout"
 
 # 7. empty discovery → no sessions emitted. NOTE: BSD xargs (macOS) does NOT run
 #    the command on empty input (GNU does), so the pipeline yields empty output
 #    rather than a files_processed:0 line — both mean "no sessions".
-empty="$(CLAUDE_CONFIG_DIR="$TMP/none" HOME="$TMP/none" bash "$DISC" 3650 \
+empty="$(CLAUDE_CONFIG_DIR="$TMP/none" HOME="$TMP/none" CODEX_HOME="$TMP/none/.codex" \
+         AGENTS_DIR="$TMP/none/.agents" bash "$DISC" 3650 \
          | tr '\n' '\0' | xargs -0 python3 "$META")"
 case "$empty" in *'"platform"'*) bad "empty discovery wrongly emitted a session: $empty" ;; *) ok "empty discovery yields no sessions (BSD xargs no-run-on-empty safe)" ;; esac
 

@@ -1,0 +1,24 @@
+WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.000 --> 00:00:04.000
+Welcome to this short authored walkthrough.
+
+00:00:04.000 --> 00:00:09.000
+These captions were written by a human editor.
+
+00:00:09.000 --> 00:00:14.000
+Each cue holds one complete, distinct sentence.
+
+00:00:14.000 --> 00:00:19.000
+There is no rolling word-by-word duplication here.
+
+00:00:19.000 --> 00:00:24.000
+So the dedup pass should leave every line intact.
+
+00:00:31.000 --> 00:00:36.000
+This line starts a second thirty-second window.
+
+00:00:36.000 --> 00:00:41.000
+It should land in its own paragraph bucket.
