@@ -308,21 +308,55 @@ agy --sandbox -p "<preamble> Key claims, tables, charts. Page-numbered." @/path/
 # Whole-repo / multi-dir scan
 agy --sandbox -p "<preamble> Scan <abs path>. file:line list grouped by directory." < /dev/null
 
-# Text critique via Gemini — the RELIABLE recipe. The bare @-attach form (bottom)
-# is FLAKY for text: it times out under --sandbox and sends NOTHING if the @-path
-# has a space. Instead put the packet in a SPACE-FREE dir, grant it with --add-dir,
-# and NAME the file for agy to read. Generous --print-timeout (text review reasons
-# for minutes, not the 120s an image needs).
-# PANEL runs: grant the per-critic packet dir ("$rundir/gemini"), never the shared
-# "$rundir" — a concurrent panelist's review is readable there (see panel lane).
-agy --sandbox --add-dir "$rundir" --print-timeout=300s \
-  -p "<preamble> <prompt> The diff is the file input-diff.patch in the directory you have been given — read that one file and review it." < /dev/null
-# Timed out ("Error: timed out waiting for response")? --sandbox is blocking the
-# read — escalate (no-go preamble STILL prepended, never drop the INSTRUCT guard)
-# and bump the timeout:
-agy --dangerously-skip-permissions --add-dir "$rundir" --print-timeout=400s \
-  -p "<preamble> <prompt> Read the file input-diff.patch in that directory and review it." < /dev/null
+# Text critique via Gemini — the RELIABLE recipe (root-caused 2026-08-06).
+# Three load-bearing pieces, all mandatory:
+#   1. SPACE-FREE dir granted via --add-dir; NAME the file in the prompt (the bare
+#      @-attach form times out under --sandbox and sends NOTHING if the path has a
+#      space — kept below only to name the trap).
+#   2. "File-reading tool ONLY, no shell commands" clause in the prompt. Under
+#      headless --sandbox, agy AUTO-DENIES any tool needing the `command`
+#      permission (it cannot prompt) — the model shells out to grep/read, gets
+#      silently denied, and returns status SUCCESS with an EMPTY response. This
+#      was the real cause of every "Gemini returned nothing" panel run.
+#   3. --output-format json + resolve the current flagship explicitly. Parse
+#      .response; an EMPTY .response with status SUCCESS = tool auto-denial (the
+#      named diagnostic is on stderr), NEVER "no findings".
+# pktdir: single-critic runs may use "$rundir"; PANEL runs MUST use the
+# per-critic dir ("$rundir/gemini") — a concurrent panelist's review is readable
+# in the shared root (see panel lane).
+pktdir="$rundir"                      # panel: pktdir="$rundir/gemini"
+gem_model="$(agy models < /dev/null | head -1)"  # newest flagship-highest-effort tag lists first
+case "$gem_model" in gemini-*) ;; *) echo "agy models gave '$gem_model' — resolve manually" >&2; exit 1;; esac
+agy --sandbox --model "$gem_model" --add-dir "$pktdir" --print-timeout=300s \
+  --output-format json \
+  -p "<preamble> Use ONLY your file-reading tool — do NOT run any shell or terminal command. <prompt> The diff is the file input-diff.patch in the directory you have been given — read that one file and review it." \
+  < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
+# Gate before trusting — ALL of: exit 0, valid JSON, .status == SUCCESS,
+# .response non-empty AND not a refusal ("I cannot access…"). On an empty
+# .response, read gemini-stderr.txt (it names the denied permission), retry once
+# with the file-reading-tool clause intact, then — and only then — escalate.
+# Escalation DROPS the ENFORCE layer entirely (only the INSTRUCT preamble
+# remains — never drop it too), so it is last resort, not step two:
+#   agy --dangerously-skip-permissions --model "$gem_model" --add-dir "$pktdir" \
+#     --print-timeout=400s --output-format json -p "<same prompt>" \
+#     < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
 # Legacy / unreliable (kept only to name the trap): agy --sandbox -p "…" @"$rundir/input-diff.patch" < /dev/null
+
+# Agentic repo review — Gemini reads the REPO itself, not just the diff. Kills
+# the diff-only-blindness class (confident "X is never defined" 100s refuted by
+# one grep — twice in past panels). Same three-piece gate as the text recipe;
+# grant the packet dir AND a SPACE-FREE repo checkout (the living folder has a
+# space — use a worktree/clone under /tmp, detached at the reviewed ref;
+# --add-dir is repeatable). Read-only is preserved: --sandbox + read-tool clause
+# — the critic reads files, it cannot run git or shell.
+repodir=/tmp/review-repo   # git worktree add --detach /tmp/review-repo <ref>
+agy --sandbox --model "$gem_model" --add-dir "$pktdir" --add-dir "$repodir" \
+  --print-timeout=300s --output-format json \
+  -p "<preamble> Use ONLY your file-reading tool — do NOT run any shell or terminal command. Review the diff in input-diff.patch (first directory). The full repository at the reviewed ref is in the second directory: before claiming anything is undefined, unused, missing, or inconsistent, READ the surrounding files to verify. Cite file:line." \
+  < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
+# Same gate as above; panel runs still stage per-critic packet dirs, and reviews
+# land via driver-side redirects — the repo grant is shared static INPUT, which
+# is fine; never let reviews land inside a granted dir.
 
 # Multi-image (≥3 shots) — --add-dir a SPACE-FREE staging dir, NEVER @-cram.
 imgdir=/tmp/visrev; mkdir -p "$imgdir"; cp /path/shots/*.png "$imgdir"/
@@ -341,13 +375,32 @@ agy --sandbox --add-dir "$imgdir" --print-timeout=120s \
 3. **`--print-timeout` caps the model wait, not the upload;** pipe `< /dev/null` for
    stdin on headless runs. For a TEXT diff review use **≥300s** — text reasons far
    longer than the 120s an image needs, and a too-short cap reads as a "timeout".
-4. **Text-packet review → `--add-dir` + NAME the file, never `@`-attach.** Both
+4. **Empty response ≠ no findings — it is silent tool auto-denial (the packet-size
+   theory is REFUTED).** Headless `--sandbox` cannot prompt, so any tool needing
+   the `command` permission is auto-denied and agy returns `status: SUCCESS` with
+   an empty `response` — text output mode throws the stderr diagnostic away, which
+   is why this masqueraded first as a "sandbox hang", then as a ">50KB packet cap"
+   (two 2026-08-06 panel runs). Fixture-refuted same day on agy 1.1.10: a 122KB
+   packet reviewed correctly in ~2s under BOTH `--sandbox` (with the
+   file-reading-tool-only clause) and the escalated form. Do not slim packets for
+   Gemini; do use the three-piece reliable recipe above, and treat any empty
+   `.response` as a permission failure to diagnose from stderr — never report it
+   as "Gemini found nothing".
+5. **Text-packet review → `--add-dir` + NAME the file, never `@`-attach.** Both
    `@"…/input-diff.patch"` and `--add-dir` *under `--sandbox`* have **timed out**
    ("Error: timed out waiting for response") on a plain text diff (confirmed twice —
-   this run + a prior eval run). Reliable path: `--add-dir <space-free dir>` +
-   a prompt that names the file to read + `--print-timeout=300s`; if it STILL times
-   out, escalate to `--dangerously-skip-permissions` (no-go preamble still
-   prepended). Treat the bare `@`-attach as a trap, not the default.
+   this run + a prior eval run). Those timeouts are most plausibly gotcha 4's
+   auto-denial surfacing as a wait rather than an empty result — same cure:
+   the file-reading-tool-only clause + JSON gating. Reliable path: `--add-dir
+   <space-free dir>` + a prompt that names the file to read + `--print-timeout=300s`;
+   if it STILL times out, escalate to `--dangerously-skip-permissions` (no-go
+   preamble still prepended). Treat the bare `@`-attach as a trap, not the default.
+6. **Every headless agy recipe in this lane — media included — gets the same
+   three-piece gate.** The video/PDF/whole-repo/multi-image recipes above predate
+   the root cause; when running any of them headless, add `--output-format json`,
+   capture stderr, and (except whole-repo scans, which legitimately roam) the
+   file-reading-tool-only clause — an empty `.response` in ANY recipe is a
+   permission failure, not an empty finding set.
 
 Guardrail split: `--sandbox` ENFORCEs (terminal/write restrictions); the no-go
 preamble INSTRUCTs (disclosure / no-roam). If `--sandbox` ever blocks an attachment
