@@ -325,7 +325,7 @@ agy --sandbox -p "<preamble> Scan <abs path>. file:line list grouped by director
 # per-critic dir ("$rundir/gemini") — a concurrent panelist's review is readable
 # in the shared root (see panel lane).
 pktdir="$rundir"                      # panel: pktdir="$rundir/gemini"
-gem_model="$(agy models < /dev/null | head -1)"  # newest flagship-highest-effort tag lists first
+gem_model="$(agy models < /dev/null | head -1 | cut -f1 | tr -d "[:space:]")"  # first FIELD of line 1 — the raw line is "tag<TAB>description" and an uncut line makes --model fail (empty ERROR response, live 2026-08-08)
 case "$gem_model" in gemini-*) ;; *) echo "agy models gave '$gem_model' — resolve manually" >&2; exit 1;; esac
 agy --sandbox --model "$gem_model" --add-dir "$pktdir" --print-timeout=300s \
   --output-format json \

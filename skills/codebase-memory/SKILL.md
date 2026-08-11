@@ -55,4 +55,7 @@ codebase-memory-mcp cli detect_changes '{"project":"P"}'
 - **No `semantic_query` tool** in v0.9.0 — embeddings only feed precomputed `SEMANTICALLY_RELATED` edges (reach them via Cypher).
 - Each CLI call cold-starts the 273 MB binary (~0.3s + `mem.init`) — fine for occasional queries; batch when you can.
 - Raw-JSON args print a deprecation warning (still work); `--args-file <path>` or piped stdin are the forward path.
-- Pinned v0.9.0; **re-vet (Deep-tier intake) on any version bump.** Replaced codegraph 2026-07-11 (QUE-428).
+- Pinned v0.9.0; **re-vet (Deep-tier intake) on any version bump.** Replaced codegraph 2026-07-11 (QUE-428); retention re-confirmed vs codegraph v1.5.0 in a 2026-08-07 head-to-head (QUE-539 Lane 2).
+- **Test-file callers are systematically MISSING from CALLS edges** (verified on two repos, Python + JS/TS, QUE-539 benchmark) — for "which tests cover/exercise X", corroborate with grep; never conclude "untested" from the graph alone.
+- `trace_path` returns `status:"ambiguous"` when a bare name collides across files — re-call with the suggested `qualified_name` (one extra round-trip; budget for it).
+- Edge counts are **non-deterministic across identical rebuilds** (±0.5% observed) — never diff raw edge counts as a change signal.
