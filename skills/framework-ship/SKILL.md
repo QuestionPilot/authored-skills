@@ -93,11 +93,21 @@ the `COMMIT_IDENTITY_ALLOWLIST`.
 Quiesce the tree first (nothing else writing into the clone), then:
 
 ```bash
+set -a; . "$CLONE/local.env"; set +a   # check-clean reads COMMIT_IDENTITY_ALLOWLIST from env — without it the identity scan silently SKIPs
 bash "$CLONE/scripts/check-clean.sh" > "$LOGS/check-clean.log" 2>&1; echo "rc=$?"
 bash "$FS/bin/check-ship-gates.sh" --stage pre-push --repo "$CLONE" \
   --local-env "$CLONE/local.env" \
-  --verify-log "$LOGS/verify.log" --check-clean-log "$LOGS/check-clean.log"
+  --verify-log "$LOGS/verify.log" --check-clean-log "$LOGS/check-clean.log" \
+  --verify-marker "PASS drift and portability checks" \
+  --check-clean-marker "PASS check-clean"
 ```
+
+The marker flags are load-bearing: the gate's default marker is the literal
+`PASSED`, which matches NEITHER `make verify`'s output (its final gate prints
+`PASS drift and portability checks`) nor check-clean's summary
+(`PASS check-clean: …`) — omit them and both log gates FAIL on a green run
+(first live run, QUE-562). If either summary line ever changes wording, update
+the flag values here rather than the gate script.
 
 The script checks branch-not-default, worktree-clean, commit-identity (author +
 committer vs the allowlist), both logs, and twin parity; it prints one PASS/FAIL
