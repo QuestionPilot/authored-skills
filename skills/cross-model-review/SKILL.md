@@ -125,11 +125,15 @@ git patch-header shapes (commit/index/From/Merge) are excluded from the hex patt
 only, so git show / diff / format-patch packets pass unstripped; a hex secret
 formatted exactly as such a header line is an accepted residual — this is a
 tripwire, not DLP. Tunable; false positives allowlisted at the call site, real
-hits force a credential rotation. Known call-site false positive: **lockfiles**
+hits force a credential rotation. Known call-site false positives: **lockfiles**
 (uv.lock, package-lock.json, Cargo.lock, poetry.lock) — their package sha256
 hashes match the hex pattern; rebuild the packet excluding the lockfile
 (`git diff -- . ':(exclude)<lockfile>'`) and note the exclusion in the ledger —
-the manifest diff carries the dependency intent. Do not widen the scanner.
+the manifest diff carries the dependency intent. Same class: **pinned content
+digests** (a snapshot sha256 pinned into a ship-authorization constant) — mask
+the digest literals in the packet copy (`<SHA256-DIGEST-MASKED>`), tell the
+critic they are masked, and note it in the ledger (observed live 2026-08-20,
+QUE-534 ship-pin review). Do not widen the scanner.
 
 **Self-test** by planting a runtime-constructed credential sentinel (must block) +
 a benign diff (must pass). **The scan is a credential tripwire only** — not
