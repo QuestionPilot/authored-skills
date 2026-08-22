@@ -52,8 +52,11 @@ Options:
   -h, --help                  This text
 
 Log contract (both logs): the file must exist, contain a line matching the
-marker, and contain NO line whose word is FAIL. Pass the FULL captured output —
-never `make verify | tail`, whose exit code reports tail, not verify.
+marker, and contain NO line that STARTS with the word FAIL (leading whitespace
+allowed). Only line-start FAILs count: test TITLES legitimately contain the
+word mid-line ("PASS commit-identity: FAIL names the author field") and must
+not trip the gate. Pass the FULL captured output — never `make verify | tail`,
+whose exit code reports tail, not verify.
 
 Gates, pre-push:   branch-not-default, worktree-clean, commit-identity,
                    verify-log, check-clean-log, twin-parity
@@ -240,7 +243,11 @@ check_log() {
     emit FAIL "$_gate" "log not found: $_path"
     return
   fi
-  _fails=$(grep -c -E '(^|[^A-Za-z])FAIL([^A-Za-z]|$)' "$_path" 2>/dev/null)
+  # Line-start only: the framework suites emit real failures as "FAIL <detail>"
+  # (optionally indented), while PASSing test titles may contain the word FAIL
+  # mid-line ("PASS commit-identity: FAIL names the author field") — first live
+  # run (QUE-562) tripped 23 such false positives under the old any-position match.
+  _fails=$(grep -c -E '^[[:space:]]*FAIL([^A-Za-z]|$)' "$_path" 2>/dev/null)
   [ -n "$_fails" ] || _fails=0
   _marks=$(grep -c -F -- "$_marker" "$_path" 2>/dev/null)
   [ -n "$_marks" ] || _marks=0

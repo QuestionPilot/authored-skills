@@ -59,8 +59,10 @@ make_repo() { # <name> -> echoes clone path
 
 write_log() { # <path> <content-kind>
   case "$2" in
-    green) printf 'gate: suite\nsuite: 38 PASS\nVERIFY PASSED\n' > "$1" ;;
-    redfail) printf 'gate: suite\ntests/foo.sh FAIL\nVERIFY PASSED\n' > "$1" ;;
+    # green includes a PASSing test title that CONTAINS the word FAIL mid-line —
+    # the restraint fixture: only line-start FAILs may trip the log gate.
+    green) printf 'gate: suite\nsuite: 38 PASS\n  PASS check-clean FAILS on a dirty tree\nVERIFY PASSED\n' > "$1" ;;
+    redfail) printf 'gate: suite\n  FAIL tests/foo.sh: broke\nVERIFY PASSED\n' > "$1" ;;
   esac
 }
 
