@@ -138,9 +138,24 @@ if [ -z "$cli" ]; then
   fi
 else
 # ------------------------------------------------------------------ cli mode --
+  # `command -v` under Git Bash resolves `.exe` but NOT `.cmd`/`.bat`/`.ps1`, so
+  # a Windows CLI that ships only shell-wrapper launchers reads as "not on PATH"
+  # even though the documented extensionless invocation works everywhere else.
+  # Fall back through the PATHEXT-style suffixes before failing; the resolved
+  # launcher (with its extension) becomes the probe target so cli-responds
+  # exercises the same file the OS would run. Unix path: first probe hits,
+  # fallback never runs, no new dependency.
+  cli_probe="$cli"
   bin_path="$(command -v "$cli" 2>/dev/null)"
+  if [ -z "$bin_path" ]; then
+    for _ext in .exe .cmd .bat .ps1; do
+      bin_path="$(command -v "$cli$_ext" 2>/dev/null)"
+      [ -n "$bin_path" ] && { cli_probe="$cli$_ext"; break; }
+    done
+  fi
   if [ -n "$bin_path" ]; then
     ok "cli-on-path" "$bin_path"
+    cli="$cli_probe"
     if "$cli" --version >/dev/null 2>&1; then
       ok "cli-responds" "$cli --version exited 0"
     elif "$cli" --help >/dev/null 2>&1; then

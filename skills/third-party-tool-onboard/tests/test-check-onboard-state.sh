@@ -171,6 +171,22 @@ assert_exit "$rc" 1 "case i: unresolvable CLI should exit 1"
 assert_line "$out" FAIL cli-on-path  "case i"
 assert_line "$out" SKIP cli-responds "case i"
 
+# ------------------------------------- (j) cli mode: .cmd-only launcher -------
+# A Windows CLI that ships only shell-wrapper launchers (foo.cmd / foo.ps1, no
+# foo.exe) is invisible to Git Bash's `command -v foo`, so the probe must fall
+# back through the PATHEXT-style suffixes itself — forcing the operator to pass
+# `--cli foo.cmd` would make the gate's contract platform-specific. Simulated
+# portably: a .cmd-named executable on PATH with no extensionless twin.
+W="$TMP/j"; build_world "$W"
+mkdir -p "$TMP/j-bin"
+printf '#!/bin/sh\n[ "$1" = "--version" ] && { echo fixture 1.0; exit 0; }\nexit 1\n' \
+  > "$TMP/j-bin/fixturecli-xyz.cmd"
+chmod +x "$TMP/j-bin/fixturecli-xyz.cmd"
+out="$(PATH="$TMP/j-bin:$PATH" "$SUT" "$NAME" --cli fixturecli-xyz --vault "$W/vault" 2>&1)"; rc=$?
+assert_exit "$rc" 0 "case j: .cmd-only CLI should resolve via the extension fallback"
+assert_line "$out" PASS cli-on-path  "case j"
+assert_line "$out" PASS cli-responds "case j (probe runs the resolved launcher)"
+
 # ----------------------------------------------------------------- verdict ----
 if [ "$failures" -eq 0 ]; then
   echo "ALL TESTS PASSED"
