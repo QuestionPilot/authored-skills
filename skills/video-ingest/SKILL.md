@@ -63,7 +63,9 @@ tracking params) resolve to the same key. Check for a prior ingest against BOTH
 the sources manifest AND existing bundle dirs:
 `python3 scripts/bundle.py dedup --key KEY --sources-root "$VAULT/20-Raw/sources"`
 — exit 1 = already present (a bundle dir with no manifest row still counts:
-resume/update, do not duplicate). Duration + chapters shape the plan.
+resume/update, do not duplicate; a pre-convention bundle that recorded only the
+source URL is matched on the bare video id and tagged `legacy-url`), exit 3 =
+sources root unscannable, which is INDETERMINATE — never treat it as clear. Duration + chapters shape the plan.
 **Long-video handling:** >30 min asks the operator **only in interactive
 sessions**; when **headless, default to transcript-only** — never block a
 background run on a prompt.
@@ -134,13 +136,26 @@ the artifact.
 recommendation MUST carry, inline:
 (a) a **timestamp/quote citation** from the video,
 (b) the specific **OS surface** it would change (capability / playbook / skill / rule),
-(c) **grep evidence** for the "do we already have this?" check — search SKILLS.md,
-   `capabilities/`, `core/`, and existing skills. A capability can exist under a
-   different name: use **bare-word** greps, not tool-scoped ones (searching
-   `executor` only next to `codex` misses a generic delegated-executor model);
-   prove absence hard before calling something a gap.
-(d) **grep evidence** against settled architecture — the vault `03-Decisions`
-   index AND `04-Lessons` (e.g. Keep-Model-Selection-Agnostic) — so nothing
+(c) **grep evidence** for the "do we already have this?" check — sweep ALL of
+   these roots (copy-pasteable list, not prose):
+   - `$CLAUDE_CONFIG_DIR/SKILLS.md` (the catalog)
+   - `$AI_CONFIG_DIR/capabilities/`
+   - `$AI_CONFIG_DIR/core/`
+   - `$CLAUDE_CONFIG_DIR/skills/` — **the installed skill BODIES; this is the
+     half that gets skipped.** The catalog answers name-existence only, never
+     phase coverage — only a body grep can show an existing skill already owns
+     the phase you claim is missing.
+   A capability can exist under a different name: use **bare-word** greps, not
+   tool-scoped ones (searching `executor` only next to `codex` misses a generic
+   delegated-executor model); prove absence hard before calling something a gap.
+   **A panel majority is not evidence either** — verify claimed gaps AND claimed
+   majorities in both directions against the files (2 of 3 panelists once
+   proposed porting a mechanism `verification/tool-freshness.md` already owned).
+(d) **grep evidence** against settled architecture — sweep BOTH vault roots
+   explicitly:
+   - `$OBSIDIAN_VAULT_PATH/03-Decisions/` (start at `_index.md`)
+   - `$OBSIDIAN_VAULT_PATH/04-Lessons/` (e.g. Keep-Model-Selection-Agnostic)
+   so nothing
    already adjudicated is re-litigated, and a declined *rationale* (e.g. cost-tier
    routing) is not smuggled back in under a new label.
 

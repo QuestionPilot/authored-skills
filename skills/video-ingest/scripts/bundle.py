@@ -11,7 +11,9 @@ Owns the mechanical, non-judgement parts of a video ingest's vault side:
                  that video is already ingested — checking BOTH the sources
                  manifest AND existing bundle dirs (a partial run that wrote a
                  bundle dir but no manifest row is still detected → resume, not
-                 duplicate).
+                 duplicate). Matches the canonical key OR the bare video id as a
+                 standalone token, so PRE-CONVENTION bundles that recorded only
+                 the source URL are found too (tagged `legacy-url`).
   * `readme`   — emit a bundle README manifest carrying the canonical key, the
                  source/license line, and a file table.
 
@@ -28,7 +30,7 @@ Usage:
 Exit codes:
     key/readme : 0 ok · 3 bad input
     dedup      : 0 NOT present (safe to create) · 1 ALREADY present (no-op/resume)
-                 · 3 bad input
+                 · 3 bad input / unscannable sources root (indeterminate)
 """
 from __future__ import annotations
 
@@ -104,35 +106,88 @@ def canonical_key(*, url: str | None = None, meta: dict | None = None) -> str | 
 # ---- dedup check ------------------------------------------------------------
 
 
+def video_id_from_key(key: str) -> str | None:
+    """The bare video id inside a canonical `extractor:id` key, or None."""
+    vid = key.split(":", 1)[1] if ":" in key else key
+    vid = vid.strip()
+    return vid or None
+
+
+def _key_pattern(key: str) -> re.Pattern[str]:
+    """
+    Token-anchored pattern matching either the canonical key or the bare video
+    id on its own.
+
+    The bare-id alternative is what finds PRE-CONVENTION bundles: bundles
+    captured before the canonical key existed stamp only the source URL, so a
+    literal `extractor:id` search misses them entirely and the check fails OPEN
+    (reports "safe to create" over an already-ingested video).
+
+    Boundaries are hand-rolled rather than `\\b` because `-` and `_` are inside
+    the id charset: the id must not be flanked by another id character, so a
+    longer token that merely CONTAINS the id does not match.
+    """
+    vid = video_id_from_key(key)
+    alts = [re.escape(key)]
+    if vid and vid != key:
+        alts.append(re.escape(vid))
+    body = "|".join(alts)
+    return re.compile(
+        rf"(?<![0-9A-Za-z_-])(?:{body})(?![0-9A-Za-z_-])"
+    )
+
+
 def find_existing(key: str, sources_root: Path) -> dict:
     """
     Look for `key` in the vault sources area.
 
-    Returns {"present": bool, "via": [...], "matches": [paths]}.
-    Scans, in order:
-      1. any `*.md` manifest / README under sources_root containing the key
-         string (canonical key is stamped into README front-matter),
-      2. bundle dirs whose own README carries the key (partial-run recovery:
-         a dir exists but the top-level manifest row was never written).
+    Returns {"present": bool, "via": [...], "matches": [paths], "scanned": int}.
+    Scans every `*.md` under sources_root for EITHER the canonical key or the
+    bare video id as a standalone token:
+      1. a manifest / README stamping the canonical key (current convention),
+      2. a bundle dir whose own README carries the key (partial-run recovery:
+         the dir exists but the top-level manifest row was never written),
+      3. any bundle that records only the source URL (pre-convention capture) —
+         matched on the bare video id and tagged `legacy-url`.
+
+    Bias: this check errs toward PRESENT. A false positive costs one operator
+    eyeball (every matching path is printed); a false negative silently
+    duplicates an existing bundle, which is the failure this scanner exists to
+    prevent.
+
+    A missing sources_root raises FileNotFoundError — an unscannable root must
+    fail CLOSED, never read as "safe to create".
     """
+    if not sources_root.exists():
+        raise FileNotFoundError(sources_root)
+
+    pattern = _key_pattern(key)
     matches: list[str] = []
     via: list[str] = []
-    if not sources_root.exists():
-        return {"present": False, "via": [], "matches": []}
+    scanned = 0
 
-    # 1 + 2 unified: any markdown file under the sources tree that stamps the key.
     for md in sorted(sources_root.rglob("*.md")):
         try:
             text = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        scanned += 1
+        if not pattern.search(text):
+            continue
+        matches.append(str(md))
         if key in text:
-            matches.append(str(md))
-            rel = md.relative_to(sources_root)
             tag = "bundle-readme" if md.name.lower() == "readme.md" else "manifest"
-            if tag not in via:
-                via.append(tag)
-    return {"present": bool(matches), "via": via, "matches": matches}
+        else:
+            tag = "legacy-url"
+        if tag not in via:
+            via.append(tag)
+
+    return {
+        "present": bool(matches),
+        "via": via,
+        "matches": matches,
+        "scanned": scanned,
+    }
 
 
 # ---- readme -----------------------------------------------------------------
@@ -239,7 +294,15 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.cmd == "dedup":
-        result = find_existing(args.key, Path(args.sources_root))
+        try:
+            result = find_existing(args.key, Path(args.sources_root))
+        except FileNotFoundError as exc:
+            print(
+                f"ERROR: sources root does not exist: {exc}\n"
+                "       An unscannable root is INDETERMINATE, not 'safe to create'.",
+                file=sys.stderr,
+            )
+            return 3
         if args.json:
             print(json.dumps(result, indent=2))
         else:
@@ -249,6 +312,14 @@ def main(argv: list[str]) -> int:
                     print(f"  {m}")
             else:
                 print("NOT PRESENT (safe to create bundle)")
+            # Print the denominator: a scan that compared nothing is not a clean
+            # bill of health.
+            print(f"  (scanned {result['scanned']} markdown file(s))")
+        if not result["scanned"]:
+            print(
+                "NOTE: scanned 0 markdown files — verify the sources root is correct.",
+                file=sys.stderr,
+            )
         return 1 if result["present"] else 0
 
     if args.cmd == "readme":

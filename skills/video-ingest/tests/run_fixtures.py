@@ -192,6 +192,80 @@ def partial_run_recovery() -> None:
         check("dedup: unrelated key -> NOT present (exit 0)", p.returncode == 0)
 
 
+# --- Pre-convention (URL-only) bundles + boundary restraint -------------------
+
+
+def legacy_url_bundles() -> None:
+    """
+    Detection half: a bundle captured BEFORE the canonical-key convention stamps
+    only the source URL. The scanner must still find it, or an ingest silently
+    duplicates it (real miss: 7 of 12 bundles in the live vault, 2026-08-24).
+
+    Restraint half: the bare video id must match only as a STANDALONE token.
+    Every restraint case ships alongside a true positive so it cannot pass
+    vacuously on empty output.
+    """
+    print("\nPre-convention URL-only bundles + boundary restraint")
+    key = "youtube:XTBWVVcF3Pk"
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "sources"
+
+        # Fail CLOSED on an unscannable root: indeterminate, not "safe to create".
+        p = run(str(BUNDLE), "dedup", "--key", key, "--sources-root", str(root))
+        check("legacy: missing sources root -> exit 3 (indeterminate)", p.returncode == 3, p.stderr.strip())
+
+        root.mkdir(parents=True)
+
+        # Detection: URL only, no canonical key anywhere in the file.
+        bdir = root / "nate-herk-fable-method"
+        bdir.mkdir()
+        (bdir / "README.md").write_text(
+            "---\n"
+            'source: "https://www.youtube.com/watch?v=XTBWVVcF3Pk"\n'
+            "---\n# pre-convention bundle (no dedup_key stamped)\n"
+        )
+        p = run(str(BUNDLE), "dedup", "--key", key, "--sources-root", str(root))
+        check(
+            "legacy: URL-only bundle -> PRESENT (exit 1)",
+            p.returncode == 1,
+            p.stdout.strip().replace("\n", " "),
+        )
+        check(
+            "legacy: match is tagged legacy-url",
+            "legacy-url" in p.stdout,
+            p.stdout.strip().replace("\n", " "),
+        )
+        check(
+            "legacy: scanned denominator is printed and non-zero",
+            "scanned 1 markdown file" in p.stdout,
+            p.stdout.strip().replace("\n", " "),
+        )
+
+        # Restraint: a longer token merely CONTAINING the id is not a match.
+        # `-` and `_` are inside the id charset, so both flanks are exercised.
+        near = root / "near-misses"
+        near.mkdir()
+        (near / "README.md").write_text(
+            "aaXTBWVVcF3Pk https://youtu.be/XTBWVVcF3Pk9 XTBWVVcF3Pk-extra _XTBWVVcF3Pk\n"
+        )
+        p = run(str(BUNDLE), "dedup", "--key", key, "--sources-root", str(root))
+        matched = [ln.strip() for ln in p.stdout.splitlines() if ln.startswith("  /")]
+        check(
+            "restraint: id-containing supersets do not match (only the real bundle does)",
+            p.returncode == 1 and len(matched) == 1 and "nate-herk-fable-method" in matched[0],
+            f"matched={matched}",
+        )
+
+        # Restraint: a different 11-char id in the same corpus stays clean.
+        p = run(str(BUNDLE), "dedup", "--key", "youtube:zzzzzzzzzzz", "--sources-root", str(root))
+        check(
+            "restraint: unrelated id -> NOT present even with 2 files scanned",
+            p.returncode == 0 and "scanned 2 markdown file" in p.stdout,
+            p.stdout.strip().replace("\n", " "),
+        )
+
+
 def main() -> int:
     print("=" * 68)
     print("video-ingest fixture suite (structural assertions)")
@@ -200,6 +274,7 @@ def main() -> int:
     fixture2_authored()
     dedup_key_variants()
     partial_run_recovery()
+    legacy_url_bundles()
     print("\n" + "=" * 68)
     print(f"RESULT: {len(_passes)} passed, {len(_fails)} failed")
     if _fails:
