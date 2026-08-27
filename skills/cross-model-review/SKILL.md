@@ -20,8 +20,8 @@ by **role** (Claude is the driver, so it routes to the other families) and by
 > **Panel v4 (2026-08-27, QUE-580).** Kimi K3 (kimi-k3:cloud) is retired from
 > the critic set — operator decision; GLM returns as **GLM 5.3 Flash**
 > (`glm-5.3-flash:cloud` via Ollama Cloud: 1M-token context, vision, thinking —
-> verified via `ollama show` at adoption). Kimi's lane recipes live in this
-> skill's pre-v4 copy (vault backup: 00-System/Machine Bootstrap) if it returns.
+> verified via `ollama show` at adoption). Kimi's v3 lanes were these GLM lanes
+> with `kimi-k3:cloud` in place of the GLM tag — swap the tag back if it returns.
 > Gemini stays the media specialist (video/audio/large-PDF) only — never a
 > panelist and never a code critic. Images route to GLM (vision) or Gemini.
 
