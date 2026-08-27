@@ -151,10 +151,15 @@ recommendation MUST carry, inline:
    **A panel majority is not evidence either** — verify claimed gaps AND claimed
    majorities in both directions against the files (2 of 3 panelists once
    proposed porting a mechanism `verification/tool-freshness.md` already owned).
-(d) **grep evidence** against settled architecture — sweep BOTH vault roots
+(d) **grep evidence** against settled architecture — sweep ALL THREE vault roots
    explicitly:
    - `$OBSIDIAN_VAULT_PATH/03-Decisions/` (start at `_index.md`)
    - `$OBSIDIAN_VAULT_PATH/04-Lessons/` (e.g. Keep-Model-Selection-Agnostic)
+   - `$OBSIDIAN_VAULT_PATH/10-Wiki/Sources/` — **prior ingests' own
+     adjudications live here, not in Decisions** (a decline/watch verdict
+     usually fails the vault's 3-gate ADR test, so the wiki source note is its
+     only durable record; added 2026-08-26 after the OKF ingest's verdicts
+     landed wiki-only and this sweep would have missed them)
    so nothing
    already adjudicated is re-litigated, and a declined *rationale* (e.g. cost-tier
    routing) is not smuggled back in under a new label.
