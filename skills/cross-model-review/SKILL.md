@@ -1,6 +1,6 @@
 ---
 name: cross-model-review
-description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for video/audio/large-PDF/whole-repo input (specialist lanes). Never review your own output — route to a different model family. The three critics are GPT (via the Codex CLI), Gemini (via the agy CLI), and GLM (via Ollama Cloud), equal first-class peers. Single critic for code review; panel→judge→synthesis for open-ended consensus.
+description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for huge-packet / whole-repo / image / video / audio / large-PDF input (specialist lanes). Never review your own output — route to a different model family. The three critics are GPT Sol (via the Codex CLI), Grok (via the Cursor agent CLI), and GLM 5.3 Flash (via Ollama Cloud), equal first-class peers; Gemini (via the agy CLI) serves the video/audio/large-PDF media lane only, never the panel. Single critic for code review; panel→judge→synthesis for open-ended consensus.
 ---
 
 # Cross-Model Review
@@ -10,25 +10,33 @@ review / verify / audit / sanity-check / tear-apart work Claude just produced,
 route to a **different model family** — a model reviewing its own family inherits
 the same blind spots, and that architectural distance is the whole point.
 
-The three critic families are **equal first-class peers**: **GPT** (the `codex`
-CLI), **Gemini** (the `agy` CLI), and **GLM** (`glm-5.2:cloud` via the `ollama`
-CLI / Ollama Cloud). There is **no capability hierarchy in any direction** — no
-"senses-only" family, no "stronger coder" family. Selection is by **role** (Claude
-is the driver, so it routes to the other families) and by **lane** (what the task
-needs), never by a cross-family ranking. GLM transport + model guide (verified
-recipes, deprecation watch): vault wiki `10-Wiki/Entities/Ollama Cloud + GLM-5.2 —
-CLI & API Guide`.
+The three critic families are **equal first-class peers**: **GPT Sol** (the
+`codex` CLI), **Grok** (the `cursor-agent` CLI), and **GLM** (`glm-5.3-flash:cloud`
+via the `ollama` CLI / Ollama Cloud). There is **no capability hierarchy in any
+direction** — no "senses-only" family, no "stronger coder" family. Selection is
+by **role** (Claude is the driver, so it routes to the other families) and by
+**lane** (what the task needs), never by a cross-family ranking.
+
+> **Panel v4 (2026-08-27, QUE-580).** Kimi K3 (kimi-k3:cloud) is retired from
+> the critic set — operator decision; GLM returns as **GLM 5.3 Flash**
+> (`glm-5.3-flash:cloud` via Ollama Cloud: 1M-token context, vision, thinking —
+> verified via `ollama show` at adoption). Kimi's lane recipes live in this
+> skill's pre-v4 copy (vault backup: 00-System/Machine Bootstrap) if it returns.
+> Gemini stays the media specialist (video/audio/large-PDF) only — never a
+> panelist and never a code critic. Images route to GLM (vision) or Gemini.
 
 ## Roles, eligibility, and count
 
 - **Driver** — Claude (this session). Never a critic or panelist of its own output.
-- **Critics** — the non-Claude families: GPT (Codex), Gemini (agy), GLM (Ollama Cloud).
+- **Critics** — the non-Claude families: GPT Sol (Codex), Grok (Cursor), GLM (Ollama Cloud).
+  Gemini (agy) is a **specialist, not a critic**: it reviews media inputs
+  (video/audio/large-PDF) only and never joins the panel or the code lanes.
 - **Judge / synthesizer** — Claude, for multi-critic lanes. **The driver judges; it
   is never a panelist of its own question** — that is the no-self-review boundary
   restated for the panel case.
 
 **Eligibility (who *may* critique) is separate from count (how many *do*).**
-Eligibility is fixed here: critics = {GPT, Gemini, GLM}. **Count is decided by the
+Eligibility is fixed here: critics = {Sol, Grok, GLM}. **Count is decided by the
 lane** — a verifiable-artifact review (code, diffs) fires **one** critic; an
 open-ended consensus question fires the **panel** (all available critics). Single
 critic by default; the panel only when the economics justify it.
@@ -45,19 +53,21 @@ output. Review that directly; do not route it.
 
 ## The two critique lanes — one critic, different prompt
 
-A code/diff review fires **one** critic. **GPT (Codex)** and **GLM (Ollama)** are
-both first-choice code critics: GPT for standard diffs, GLM when the packet is
-large (its 1M-token context takes whole-repo text packets no other lane can);
-use Gemini (agy) when the input is in its media specialist lane (below). Always
-pipe content via stdin; **never** tell a critic to "go read these files" (it can
-hang on approval round-trips). Source the scan gate first (see next section), then:
+A code/diff review fires **one** critic. **Sol (Codex)** is the default code
+critic for standard diffs; **GLM (Ollama)** when the packet is large (its
+1M-token context takes whole-repo text packets); **Grok (Cursor)** when the
+review benefits from agentic repo reading (see its lane below). Always pipe
+content via stdin where the CLI supports it; **never** tell a critic to "go read
+these files" outside a deliberately granted workspace (it can hang on approval
+round-trips). Source the scan gate first (see next section), then:
 
 **Confirmation review (default):**
 
 ```bash
 cat "$rundir/input-diff.patch" | codex exec --skip-git-repo-check -s read-only \
+  -m gpt-5.6-sol -c model_reasoning_effort="high" \
   "<no-go preamble: core + critique clause> Review this diff. For each finding: title, file:line, why-it-matters, and a confidence anchor — 0=false-positive/pre-existing, 25=can't verify, 50=real but advisory/unconfirmed, 75=concrete consequence a user/caller hits, 100=verifiable AND frequent. Omit 0 and 25. Then Blocking risks / Missing tests. Be specific." \
-  > "$rundir/codex-review.md"
+  > "$rundir/sol-review.md"
 ```
 
 **Adversarial review** (on "tear this apart" / "stress test" / "prove it's broken",
@@ -65,8 +75,9 @@ or forced by the risk paths below):
 
 ```bash
 cat "$rundir/input-diff.patch" | codex exec --skip-git-repo-check -s read-only \
+  -m gpt-5.6-sol -c model_reasoning_effort="high" \
   "<no-go preamble> Adversarial review — construct failure scenarios, don't checklist. Run the four techniques scaled to diff size/risk (see taxonomy): (1) assumption violation, (2) composition failure across boundaries, (3) cascade construction, (4) abuse cases. Each finding: the scenario step-by-step (trigger → path → wrong outcome), file:line, confidence anchor (omit 0/25; 50=advisory, 75=concrete consequence, 100=verifiable AND frequent). Prove it's broken." \
-  > "$rundir/codex-review.md"
+  > "$rundir/sol-review.md"
 ```
 
 **GLM equivalents (confirmation or adversarial — same prompts, different pipe).**
@@ -76,10 +87,11 @@ dir, web, or shell access at all** — the packet is the critic's entire world:
 ```bash
 { printf '%s\n\n' "<no-go preamble + the same review prompt as above>"; \
   cat "$rundir/input-diff.patch"; } | \
-  ollama run glm-5.2:cloud --think high --hidethinking > "$rundir/glm-review.md"
+  ollama run glm-5.3-flash:cloud --think high --hidethinking > "$rundir/glm-review.md"
 # Clean-capture alternative (no TTY spinner noise in the output): POST the same
-# combined prompt to localhost:11434/api/generate with "stream":false,"think":false —
-# the .response JSON field is the review.
+# combined prompt to localhost:11434/api/generate with "stream":false,"think":"high" —
+# the .response JSON field is the review (reasoning arrives in a separate
+# .thinking field, so the capture stays clean WITHOUT downgrading think level).
 ```
 
 **Resume invariant — force read-only on every `codex exec resume`.** A fresh
@@ -138,7 +150,7 @@ QUE-534 ship-pin review). Do not widen the scanner.
 **Self-test** by planting a runtime-constructed credential sentinel (must block) +
 a benign diff (must pass). **The scan is a credential tripwire only** — not
 proprietary-source/customer-data DLP; the operator owns what gets piped, and a
-panel widens the blast radius (content reaches two external models, not one).
+panel widens the blast radius (content reaches multiple external models, not one).
 
 ## Per-lane tool policy
 
@@ -147,7 +159,7 @@ never means "no network."
 
 | Lane | Provider network | Web-research tools | Writes/deletes | Local roam |
 | --- | --- | --- | --- | --- |
-| **Critique** (code/diff review) | on | **off** | off | off — content piped + scanned |
+| **Critique** (code/diff review) | on | **off** | off | off — content piped + scanned, or a single granted packet workspace |
 | **Research** (web-grounded question) | on | **on** | off | off |
 
 **Critique lane:** content piped + scanned; no web tools, no writes, no roam.
@@ -157,19 +169,22 @@ static scan checks the input, not runtime HTTP). A critic needing local context
 runs web-off. Never combine local-read and network-egress tools in one critic.
 **GLM packet lane is structurally isolated:** `ollama run` has no tools of any
 kind — the ENFORCE column is satisfied by construction; only the no-go preamble
-(INSTRUCT) rides along. GLM's *agentic* lane is codex's sandbox with a different
-brain — every codex invariant applies unchanged.
+(INSTRUCT) rides along. **Grok's lane is agentic:** `cursor-agent -p` ships with
+ALL tools on — write and shell included — so its read-only guarantee comes from
+`--mode ask` (read-only Q&A mode) plus workspace scoping; never run a critic with
+`--force`/`--yolo`, and never grant it the repo working tree as its workspace on
+a critique run (stage a packet dir).
 
 ## Guardrail split + honest sandbox limits
 
-- **ENFORCE** writes/deletes via a **read-only sandbox** (`codex -s read-only`;
-  `agy --sandbox`) — free, a reviewer never writes.
+- **ENFORCE** writes/deletes via a **read-only mode** (`codex -s read-only`;
+  `cursor-agent --mode ask`) — a reviewer never writes.
 - **INSTRUCT** disclosure / secrets / account-actions via the **no-go preamble** —
   it covers content the critic fetches itself, which the input scan can't see.
 
 **Read-only is necessary, not sufficient** — it blocks writes, not reads. The real
-read-side guard is the combination: **stdin-only packet + scoped/zero extra-dir
-access + no web tools in critique.**
+read-side guard is the combination: **stdin-only packet (Sol, GLM) or a single
+staged packet workspace (Grok) + no web tools in critique.**
 
 ### No-go preamble (prepend to every critic invocation)
 
@@ -181,8 +196,8 @@ Universal core always; append the active lane's clause.
 > Return findings only.
 >
 > **Critique lane adds:** review only the content provided to you (piped on stdin or
-> attached as a file) — do not fetch additional files and make no network requests
-> beyond your own model provider.
+> present in the workspace you were given) — do not fetch additional files and make
+> no network requests beyond your own model provider.
 >
 > **Research lane adds:** web-research tools are permitted (that is the task), but do
 > not exfiltrate any piped local context through them, and still make no writes or
@@ -197,20 +212,28 @@ Pass **ephemeral per-call flags only**. Never mutate behavior-affecting global
 config — model, sandbox mode, or permission policy — to run a review (the resume
 `-c sandbox_mode` pin above is the danger case). Critic CLIs still write benign
 caches/auth-refresh/logs; that's fine — what matters is config *semantics*.
+`cursor-agent --trust` trusts a directory for that invocation's workspace — point
+it ONLY at the staged packet dir, never blanket-trust the repo.
 
-## Model policy — current flagship tier, no lock-in
+## Model policy — operator-pinned roster, resolve successors on failure
 
-**No version literals, no cross-family ranking.** Each family resolves to its own
-current flagship tier: **Codex** defers to its configured model but **warn if it
-resolves below the GPT flagship tier**; **agy** resolves the current flagship-tier
-Gemini (verify via `agy models`; a within-Gemini newer-flagship-over-older choice
-is fine — not a cross-family claim); **GLM** resolves to the newest `glm-*:cloud`
-tag on Ollama Cloud (currently `glm-5.2:cloud`) — Ollama **retires cloud models on
-a schedule**, so a failing `ollama show glm-5.2:cloud` means "check the deprecations
-table at docs.ollama.com/cloud.md and move to the named successor," not an outage.
-The resolution *mechanism* differs per CLI; the *intent* (each lands on its own
-flagship) does not. Surface the resolved model per family in the self-check; warn
-rather than silently degrade.
+The roster below is the **operator's explicit pick (2026-08-24, QUE-577)** — pin
+these tags per call; do not silently substitute:
+
+| Family | CLI | Pinned invocation |
+| --- | --- | --- |
+| GPT Sol | `codex` | `-m gpt-5.6-sol -c model_reasoning_effort="high"` |
+| Grok | `cursor-agent` | `--model cursor-grok-4.6-high-fast` |
+| GLM | `ollama` | `glm-5.3-flash:cloud --think high` |
+
+When a pinned tag stops resolving (Ollama retires cloud tags on a schedule;
+Cursor and Codex rotate model lists), **check the CLI's live model list**
+(`ollama show`, `cursor-agent models`, the Codex 400 error names it) and move to
+the named successor at the same or higher tier — warn the user, never silently
+degrade. No version literal here outranks a live model list. Note: the Codex CLI
+(ChatGPT account) has **no fast Sol tag** — `gpt-5.6-sol-fast` is rejected; the
+fast variant exists only as Cursor's `gpt-5.6-sol-high-fast` transport, usable if
+a run explicitly wants it (family distance lives in the model, not the CLI).
 
 ## Grading critic findings — anchored rubric + suppression
 
@@ -257,7 +280,7 @@ retry loop", not "missing timeout handling".
 ## Validator second-pass (high-stakes — optional)
 
 For risk-path forced adversarial or anything externalized (PR comments, autofix),
-run an independent second Codex pass per surviving `>= 75` finding. It **re-verifies,
+run an independent second Sol pass per surviving `>= 75` finding. It **re-verifies,
 doesn't re-reason** — answers only: (1) Is it **real** in the code as written? (2)
 Is it **introduced by this diff**? (3) Is it **not already handled elsewhere**? Pipe
 the same diff via stdin; prompt for `{"validated": true|false, "reason": "<one sentence>"}`;
@@ -272,9 +295,11 @@ fails twice (same test failure on the same path, same error on the same command,
 same edit re-tried with no progress), MUST hand to a critic with full context:
 
 ```bash
-cat <context-bundle> | codex exec --skip-git-repo-check -s read-only "Rescue. Driver tried 2× and failed. Full context attached. Solve from scratch."
+cat <context-bundle> | codex exec --skip-git-repo-check -s read-only \
+  -m gpt-5.6-sol -c model_reasoning_effort="high" \
+  "Rescue. Driver tried 2× and failed. Full context attached. Solve from scratch."
 # Any eligible family works — GLM takes the same bundle:
-#   cat <context-bundle> | ollama run glm-5.2:cloud --think high --hidethinking
+#   cat <context-bundle> | ollama run glm-5.3-flash:cloud --think high --hidethinking
 ```
 
 Reset only when the test/build passes, the goal changes, or the user says "keep trying."
@@ -300,141 +325,73 @@ infra/**             IaC
 Verb-agnostic: "refactor", "plan", "design" fires if the target is risky. Keywords
 alone in casual chat do not fire — it must be an active edit on these paths.
 
-## Specialist lane — Gemini (agy), where its tooling fits the input
+## Agentic lane — Grok (Cursor agent CLI), workspace-scoped repo review
 
-Some inputs Gemini's tooling handles best today (native video/audio/PDF ingestion,
-large multimodal context, whole-repo scans). This is a **tooling fact, not a
-capability ranking** — route by what the input needs and demand cited findings:
+Grok's lane is **agentic**: `cursor-agent` reads files itself inside a granted
+workspace. That kills the diff-only-blindness class (confident "X is never
+defined" strikes refuted by one grep) without giving up read-only. Verified live
+2026-08-24 (`cursor-agent` 2026.08.11).
 
 ```bash
-# Video / audio — cap duration; timestamped findings
-agy --sandbox -p "<no-go preamble: specialist clause> Analyze. Timestamped list: [MM:SS] event." @/path/clip.mp4 < /dev/null
+# Text/diff critique — stage a packet dir, grant ONLY it as the workspace:
+pktdir="$rundir"                      # panel: pktdir="$rundir/grok"
+cursor-agent -p --output-format text --mode ask --trust \
+  --workspace "$pktdir" --model cursor-grok-4.6-high-fast \
+  "<no-go preamble: critique clause> Review the diff in input-diff.patch in this workspace. For each finding: title, file:line, why-it-matters, confidence anchor (omit 0/25; 50=advisory, 75=concrete consequence, 100=verifiable AND frequent). Then Blocking risks / Missing tests." \
+  > "$rundir/grok-review.md" 2> "$rundir/grok-stderr.txt"
 
-# Large PDF — cap pages; page-numbered findings
-agy --sandbox -p "<preamble> Key claims, tables, charts. Page-numbered." @/path/doc.pdf < /dev/null
-
-# Whole-repo / multi-dir scan
-agy --sandbox -p "<preamble> Scan <abs path>. file:line list grouped by directory." < /dev/null
-
-# Text critique via Gemini — the RELIABLE recipe (root-caused 2026-08-06).
-# Three load-bearing pieces, all mandatory:
-#   1. SPACE-FREE dir granted via --add-dir; NAME the file in the prompt (the bare
-#      @-attach form times out under --sandbox and sends NOTHING if the path has a
-#      space — kept below only to name the trap).
-#   2. "File-reading tool ONLY, no shell commands" clause in the prompt. Under
-#      headless --sandbox, agy AUTO-DENIES any tool needing the `command`
-#      permission (it cannot prompt) — the model shells out to grep/read, gets
-#      silently denied, and returns status SUCCESS with an EMPTY response. This
-#      was the real cause of every "Gemini returned nothing" panel run.
-#   3. --output-format json + resolve the current flagship explicitly. Parse
-#      .response; an EMPTY .response with status SUCCESS = tool auto-denial (the
-#      named diagnostic is on stderr), NEVER "no findings".
-# pktdir: single-critic runs may use "$rundir"; PANEL runs MUST use the
-# per-critic dir ("$rundir/gemini") — a concurrent panelist's review is readable
-# in the shared root (see panel lane).
-pktdir="$rundir"                      # panel: pktdir="$rundir/gemini"
-gem_model="$(agy models < /dev/null | head -1 | cut -f1 | tr -d "[:space:]")"  # first FIELD of line 1 — the raw line is "tag<TAB>description" and an uncut line makes --model fail (empty ERROR response, live 2026-08-08)
-case "$gem_model" in gemini-*) ;; *) echo "agy models gave '$gem_model' — resolve manually" >&2; exit 1;; esac
-agy --sandbox --model "$gem_model" --add-dir "$pktdir" --print-timeout=300s \
-  --output-format json \
-  -p "<preamble> Use ONLY your file-reading tool — do NOT run any shell or terminal command. <prompt> The diff is the file input-diff.patch in the directory you have been given — read that one file and review it." \
-  < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
-# Gate before trusting — ALL of: exit 0, valid JSON, .status == SUCCESS,
-# .response non-empty AND not a refusal ("I cannot access…"). On an empty
-# .response, read gemini-stderr.txt (it names the denied permission), retry once
-# with the file-reading-tool clause intact, then — and only then — escalate.
-# Escalation DROPS the ENFORCE layer entirely (only the INSTRUCT preamble
-# remains — never drop it too), so it is last resort, not step two:
-#   agy --dangerously-skip-permissions --model "$gem_model" --add-dir "$pktdir" \
-#     --print-timeout=400s --output-format json -p "<same prompt>" \
-#     < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
-# Legacy / unreliable (kept only to name the trap): agy --sandbox -p "…" @"$rundir/input-diff.patch" < /dev/null
-
-# Agentic repo review — Gemini reads the REPO itself, not just the diff. Kills
-# the diff-only-blindness class (confident "X is never defined" 100s refuted by
-# one grep — twice in past panels). Same three-piece gate as the text recipe;
-# grant the packet dir AND a SPACE-FREE repo checkout (the living folder has a
-# space — use a worktree/clone under /tmp, detached at the reviewed ref;
-# --add-dir is repeatable). Read-only is preserved: --sandbox + read-tool clause
-# — the critic reads files, it cannot run git or shell.
+# Agentic repo review — Grok reads the REPO itself, not just the diff. Grant the
+# packet dir AS the workspace plus a detached checkout of the reviewed ref via
+# --add-dir (worktree/clone under /tmp, never the live working tree):
 repodir=/tmp/review-repo   # git worktree add --detach /tmp/review-repo <ref>
-agy --sandbox --model "$gem_model" --add-dir "$pktdir" --add-dir "$repodir" \
-  --print-timeout=300s --output-format json \
-  -p "<preamble> Use ONLY your file-reading tool — do NOT run any shell or terminal command. Review the diff in input-diff.patch (first directory). The full repository at the reviewed ref is in the second directory: before claiming anything is undefined, unused, missing, or inconsistent, READ the surrounding files to verify. Cite file:line." \
-  < /dev/null > "$rundir/gemini-review.json" 2> "$rundir/gemini-stderr.txt"
-# Same gate as above; panel runs still stage per-critic packet dirs, and reviews
-# land via driver-side redirects — the repo grant is shared static INPUT, which
-# is fine; never let reviews land inside a granted dir.
-
-# Multi-image (≥3 shots) — --add-dir a SPACE-FREE staging dir, NEVER @-cram.
-imgdir=/tmp/visrev; mkdir -p "$imgdir"; cp /path/shots/*.png "$imgdir"/
-agy --sandbox --add-dir "$imgdir" --print-timeout=120s \
-  -p "<preamble> VIEW each image in $imgdir. One line per file: <filename>: <finding>. End with VERDICT." < /dev/null
+# The repo grant is DELIBERATE shared static input — it does not pass the
+# outbound scan (operator-owned source; the scan gates the packet). <ref> must
+# be the ref the diff applies to, or "undefined X" checks hit the wrong tree.
+# Remove the worktree after the run (git worktree remove /tmp/review-repo).
+cursor-agent -p --output-format text --mode ask --trust \
+  --workspace "$pktdir" --add-dir "$repodir" --model cursor-grok-4.6-high-fast \
+  "<preamble> Review the diff in input-diff.patch. The repository at the reviewed ref is also available: before claiming anything is undefined, unused, missing, or inconsistent, READ the surrounding files to verify. Cite file:line." \
+  > "$rundir/grok-review.md" 2> "$rundir/grok-stderr.txt"
 ```
 
-**agy gotchas (the specialist lane's sharpest edges):**
-1. **Multi-image → `--add-dir`, never `@`-cram.** Inlining several (esp. multi-MB)
-   images as trailing `@file` args **hangs** in image-loading, *before* the
-   print-wait — `--print-timeout` doesn't bound it, and shell `timeout` can't kill a
-   Go binary. `--add-dir <dir>` makes agy read each image with its own tools.
-2. **A space in an `@`-path silently sends NO content.** Stage in a space-free dir
-   (`/tmp/…`, or the run dir under `$CROSS_MODEL_OUT_DIR`) — the operator repo lives
-   under a path with a space, so this bites.
-3. **`--print-timeout` caps the model wait, not the upload;** pipe `< /dev/null` for
-   stdin on headless runs. For a TEXT diff review use **≥300s** — text reasons far
-   longer than the 120s an image needs, and a too-short cap reads as a "timeout".
-4. **Empty response ≠ no findings — it is silent tool auto-denial (the packet-size
-   theory is REFUTED).** Headless `--sandbox` cannot prompt, so any tool needing
-   the `command` permission is auto-denied and agy returns `status: SUCCESS` with
-   an empty `response` — text output mode throws the stderr diagnostic away, which
-   is why this masqueraded first as a "sandbox hang", then as a ">50KB packet cap"
-   (two 2026-08-06 panel runs). Fixture-refuted same day on agy 1.1.10: a 122KB
-   packet reviewed correctly in ~2s under BOTH `--sandbox` (with the
-   file-reading-tool-only clause) and the escalated form. Do not slim packets for
-   Gemini; do use the three-piece reliable recipe above, and treat any empty
-   `.response` as a permission failure to diagnose from stderr — never report it
-   as "Gemini found nothing".
-5. **Text-packet review → `--add-dir` + NAME the file, never `@`-attach.** Both
-   `@"…/input-diff.patch"` and `--add-dir` *under `--sandbox`* have **timed out**
-   ("Error: timed out waiting for response") on a plain text diff (confirmed twice —
-   this run + a prior eval run). Those timeouts are most plausibly gotcha 4's
-   auto-denial surfacing as a wait rather than an empty result — same cure:
-   the file-reading-tool-only clause + JSON gating. Reliable path: `--add-dir
-   <space-free dir>` + a prompt that names the file to read + `--print-timeout=300s`;
-   if it STILL times out, escalate to `--dangerously-skip-permissions` (no-go
-   preamble still prepended). Treat the bare `@`-attach as a trap, not the default.
-6. **Every headless agy recipe in this lane — media included — gets the same
-   three-piece gate.** The video/PDF/whole-repo/multi-image recipes above predate
-   the root cause; when running any of them headless, add `--output-format json`,
-   capture stderr, and (except whole-repo scans, which legitimately roam) the
-   file-reading-tool-only clause — an empty `.response` in ANY recipe is a
-   permission failure, not an empty finding set.
+**Grok/Cursor gotchas (this lane's sharpest edges):**
+1. **`-p` has ALL tools on by default — write and shell included.** `--mode ask`
+   is the read-only ENFORCE; it is mandatory on every critique invocation. Never
+   pass `--force`/`--yolo` on a review, and never rely on the preamble alone.
+   Honest limit: `--mode ask` restricts writes/edits, not web access — the no-go
+   preamble is the web guard on this lane, so never stage sensitive content for
+   Grok that the preamble alone must protect from a web tool.
+2. **Untrusted workspaces block headless runs** — without `--trust` the run exits
+   with a "Run 'agent' interactively to decide" notice and NO review. `--trust`
+   is per-invocation and scoped to the workspace you point it at; point it at the
+   staged packet dir only.
+3. **Workspace defaults to the CWD.** Always pass `--workspace "$pktdir"` — a
+   forgotten flag runs the critic inside whatever directory the driver happens to
+   be in (the live repo, a shared run dir).
+4. **Byte-count the capture before trusting it** (`wc -c`) and read stderr on an
+   empty one — an empty file is a failed run to diagnose, never "no findings".
+5. **Model tag pinned** (`cursor-grok-4.6-high-fast`); on a tag error re-check
+   `cursor-agent models` and pick the successor Grok tag at the top tier.
 
-Guardrail split: `--sandbox` ENFORCEs (terminal/write restrictions); the no-go
-preamble INSTRUCTs (disclosure / no-roam). If `--sandbox` ever blocks an attachment
-read on this agy version, fall back to `--dangerously-skip-permissions` **with the
-no-go preamble still prepended** — never drop the INSTRUCT guard.
+## Long-context + vision lane — GLM (Ollama), where the packet outsizes the others
 
-Always demand timestamps / page numbers / `file:line` citations — never a flat summary.
-
-## Long-context lane — GLM (Ollama), where the packet outsizes the others
-
-GLM-5.2's **1M-token context** takes whole-repo text packets that would choke the
-other lanes — a **tooling fact, not a ranking**. Text only: GLM has **no vision
-through Ollama**, so media stays with Gemini above.
+GLM 5.3 Flash's **1M-token context** takes whole-repo text packets that would choke the
+other lanes — a **tooling fact, not a ranking**. It is also the roster's
+**vision-capable** critic (image inputs); video/audio/large-PDF route to the
+Gemini media lane below.
 
 ```bash
 # Whole-repo / huge-packet text review — stage, scan, pipe the whole packet:
 { printf '%s\n\n' "<no-go preamble: critique clause> <prompt — file:line findings grouped by directory>"; \
   cat "$rundir/input-repo-packet.txt"; } | \
-  ollama run glm-5.2:cloud --think high --hidethinking > "$rundir/glm-review.md"
+  ollama run glm-5.3-flash:cloud --think high --hidethinking > "$rundir/glm-review.md"
 
-# Agentic repo exploration — GLM brain in the codex harness (codex's built-in
-# `ollama` provider); ALL codex sandbox rules apply unchanged (-s read-only,
-# resume pin, no behavior-affecting global writes):
-codex exec --skip-git-repo-check -s read-only \
-  -c model_provider=ollama -c model="glm-5.2:cloud" \
-  "<no-go preamble> <review prompt — cite file:line>" > "$rundir/glm-review.md"
+# Image review — stage the image into the run dir first (scan gate applies to
+# staged packets; never point the critic at a live path outside the run dir):
+cp /path/shot.png "$rundir/input-shot.png"
+ollama run glm-5.3-flash:cloud --think high --hidethinking \
+  "<no-go preamble: specialist clause> Describe and critique the UI in $rundir/input-shot.png — one finding per line, end with VERDICT." \
+  > "$rundir/glm-review.md"
 ```
 
 **GLM gotchas (this lane's sharpest edges):**
@@ -443,11 +400,55 @@ codex exec --skip-git-repo-check -s read-only \
 2. **TTY spinner ANSI noise** pollutes CLI captures — `grep -a` when reading back,
    or capture via `localhost:11434/api/generate` for clean JSON.
 3. **Cloud tags get retired on a schedule** — self-check probes
-   `ollama show glm-5.2:cloud`; on failure consult the deprecations table
+   `ollama show glm-5.3-flash:cloud`; on failure consult the deprecations table
    (docs.ollama.com/cloud.md) for the named successor.
-4. The packet lane is **structurally tool-free** (nothing to sandbox); the agentic
-   lane is codex's sandbox with a different brain — same invariants, same tail-parse
-   rule for output.
+4. The packet lane is **structurally tool-free** (nothing to sandbox); if a run
+   ever needs GLM agentic, use the Codex harness with an Ollama provider pin —
+   every codex invariant applies unchanged.
+
+## Media specialist lane — Gemini (agy), video / audio / large-PDF only
+
+Gemini is retained for the inputs its tooling handles natively (video, audio,
+large PDFs, multi-image sweeps) — a **tooling fact, not a ranking**. Specialist
+only: it never reviews code/diffs and never sits on the panel in v4.
+
+```bash
+# Video / audio — cap duration; timestamped findings
+agy --sandbox -p "<no-go preamble: specialist clause> Analyze. Timestamped list: [MM:SS] event." @/path/clip.mp4 < /dev/null
+
+# Large PDF — cap pages; page-numbered findings
+agy --sandbox -p "<preamble> Key claims, tables, charts. Page-numbered." @/path/doc.pdf < /dev/null
+
+# Multi-image (≥3 shots) — --add-dir a SPACE-FREE staging dir, NEVER @-cram
+imgdir=/tmp/visrev; mkdir -p "$imgdir"; cp /path/shots/*.png "$imgdir"/
+agy --sandbox --add-dir "$imgdir" --print-timeout=120s \
+  -p "<preamble> VIEW each image in $imgdir. One line per file: <filename>: <finding>. End with VERDICT." < /dev/null
+```
+
+**agy gotchas (all load-bearing — each cost a lost run before it was learned):**
+1. **Headless runs REQUIRE `< /dev/null`** — an open stdin blocks before any
+   content is read and masquerades as a sandbox hang.
+2. **A space in an `@`-path silently sends NO content** — stage in a space-free
+   dir (the operator repo path has a space).
+3. **Empty response ≠ no findings.** Headless `--sandbox` AUTO-DENIES any tool
+   needing the `command` permission and returns `status: SUCCESS` with an empty
+   response. Add `--output-format json`, capture stderr, byte-count the output
+   (`wc -c`), and include a "use ONLY your file-reading tool — no shell/terminal
+   commands" clause where file reads are involved. An empty `.response` is a
+   permission failure to diagnose from stderr, never "no findings".
+4. **Multi-image → `--add-dir`, never trailing `@file` args** (image loading can
+   hang before the print-wait; `--print-timeout` can't bound it).
+5. **`--print-timeout` caps the model wait, not the upload** — 120s for images,
+   ≥300s for anything text-heavy.
+6. Model: resolve the current flagship via
+   `agy models < /dev/null | head -1 | cut -f1` (first FIELD only — the raw
+   line is tab-separated and an uncut value makes `--model` fail).
+7. Escalation to `--dangerously-skip-permissions` drops the ENFORCE layer —
+   last resort only, no-go preamble always kept.
+
+Guardrail split: `--sandbox` ENFORCEs; the no-go preamble INSTRUCTs (specialist
+clause: read only the provided media, no other roam). Always demand timestamps /
+page numbers / filenames — never a flat summary.
 
 ## Panel → judge → synthesis — explicit consensus only
 
@@ -455,7 +456,7 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
 "cross-architecture consensus"). This is the panel lane — **diversity-dominated**
 (open-ended question, no CI backstop, the opposite economics from code review).
 
-- **Panelists** = all available non-driver families: GPT (Codex) + Gemini (agy) +
+- **Panelists** = all available non-driver families: Sol (Codex) + Grok (Cursor) +
   GLM (Ollama). Each answers the **same** question independently with structured
   output:
 
@@ -469,27 +470,28 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
 
 - **Per-critic packet isolation (hard staging rule).** Panelists run concurrently,
   and a critic granted the shared run dir can list it and read the other's
-  in-flight review (observed live 2026-07-06: agy, granted `--add-dir "$rundir"`,
-  read `codex-review.md` mid-write — the independence premise broken). Stage a
+  in-flight review (observed live 2026-07-06: a critic granted the shared root
+  read another's review mid-write — the independence premise broken). Stage a
   private packet dir per critic and grant ONLY that dir:
 
   ```bash
-  for critic in codex gemini glm; do
+  for critic in sol grok glm; do
     mkdir -p "$rundir/$critic"; cp "$rundir"/input-* "$rundir/$critic/"
   done
-  # GPT panelist: pipe "$rundir/codex/<packet>" on stdin — no dir grant at all.
-  # Gemini panelist: --add-dir "$rundir/gemini" — NEVER the shared "$rundir".
+  # Sol panelist: pipe "$rundir/sol/<packet>" on stdin — no dir grant at all.
+  # Grok panelist: --workspace "$rundir/grok" — NEVER the shared "$rundir".
   # GLM panelist: pipe "$rundir/glm/<packet>" on stdin — structurally isolated
   # (ollama run has no file access; a dir grant is not even possible).
   ```
 
   Review files still land in the shared root via driver-side redirects
-  (`> "$rundir/codex-review.md"`, `> "$rundir/gemini-review.md"`) — the judge
-  reads the root; no critic can. The shared-root `--add-dir "$rundir"` in the
-  specialist text recipe is safe only for single-critic runs. Critics can also
-  read their own cwd, so never invoke one with its working directory inside the
-  shared run dir. Record the evidence in `reconciled.md`: per-critic dirs staged,
-  and the agy transcript shows no listing/read of the other critic's file.
+  (`> "$rundir/sol-review.md"`, `> "$rundir/grok-review.md"`) — the judge
+  reads the root; no critic can. Critics can also read their own cwd, so never
+  invoke one with its working directory inside the shared run dir — on panel
+  runs launch Sol with its cwd set to its own packet dir
+  (`cd "$rundir/sol" && cat input-* | codex exec …`). Record the
+  evidence in `reconciled.md`: per-critic dirs staged, and the Grok transcript
+  shows no listing/read of the other critics' files.
 
 - **Judge / synthesizer** = **Claude** (never a panelist of its own question). Diff
   the answers — where they agree, where they disagree — and adjudicate **by
@@ -500,17 +502,18 @@ Only when the user explicitly invokes it ("ask all three", "before I commit",
 ## Startup self-check (once per session, before the first route)
 
 ```bash
-codex --version 2>&1 | head -1   # GPT critic CLI
-agy --version 2>&1 | head -1     # Gemini critic CLI
-ollama --version 2>&1 | head -1  # GLM critic CLI
-ollama show glm-5.2:cloud >/dev/null 2>&1 || \
+codex --version 2>&1 | head -1         # Sol critic CLI
+cursor-agent --version 2>&1 | head -1  # Grok critic CLI (auth: cursor-agent status)
+ollama --version 2>&1 | head -1        # GLM critic CLI
+ollama show glm-5.3-flash:cloud >/dev/null 2>&1 || \
   echo "GLM cloud tag missing/retired — check docs.ollama.com/cloud.md deprecations"
+agy --version 2>&1 | head -1           # Gemini media-specialist CLI (lane-only)
 ```
 
-Surface the resolved flagship-tier model per family alongside the versions. A
-missing CLI → announce once, continue gracefully (the eligible set shrinks to the
-present critics), do not retry every turn. `agy` lives at `~/.local/bin/agy`; if the
-binary exists but `agy --version` fails, `~/.local/bin` isn't on `PATH`.
+Surface the resolved model per family alongside the versions. A missing CLI →
+announce once, continue gracefully (the eligible set shrinks to the present
+critics), do not retry every turn. `cursor-agent` lives at `~/.local/bin/`; if a
+binary exists but `--version` fails, `~/.local/bin` isn't on `PATH`.
 
 ## Filing
 
@@ -518,25 +521,27 @@ binary exists but `agy --version` fails, `~/.local/bin` isn't on `PATH`.
 $CROSS_MODEL_OUT_DIR/<YYYY-MM-DD>-<slug>/
   ├── input-diff.patch — the scanned packet sent to the critic (post-scan; same file the scan gate validated)
   ├── <critic>/ — panel runs: per-critic packet dir (own copy of input-*); the ONLY dir granted to that critic
-  ├── <critic>-review.md — critic output (codex-review.md / gemini-review.md / glm-review.md)
+  ├── <critic>-review.md — critic output (sol-review.md / grok-review.md / glm-review.md)
   └── reconciled.md    — Claude's synthesis
 ```
 
-Append one line per run to `$CROSS_MODEL_OUT_DIR/log.md` — the compounding ledger.
-`CROSS_MODEL_OUT_DIR` defaults to `$HOME/cross-model-out`.
+Append one line per run to `${CROSS_MODEL_OUT_DIR:-$HOME/cross-model-out}/log.md`
+— the compounding ledger (use the defaulted form; a bare `$CROSS_MODEL_OUT_DIR`
+resolves to `/log.md` when unset).
 
 **Reading back the captured output — two traps that masquerade as "empty result".**
 - **`grep -a`, always.** Critic transcripts and any captured PowerShell logs carry
   ANSI colour escapes; plain `grep`/`rg` treats such a file as **binary** and
   silently suppresses matches (you see nothing and wrongly conclude the run failed).
-  Use `grep -a` — or strip ANSI first — on every `*-review.md` and PS log.
+  Use `grep -a` — or strip ANSI first — on every `*-review.md` and PS log. GLM
+  CLI captures carry spinner ANSI noise (or capture via the local API for clean
+  JSON).
 - **Codex findings live at the TAIL.** `codex exec` streams its reasoning trace,
   SessionStart-hook lines, and an occasional `failed to load skill …` warning *before*
   the answer; the real **Findings / Blocking risks / Missing tests** are at the END
   (after the final `codex` marker). Extract the tail (`tail -n`), don't parse the
-  whole transcript — this applies equally to codex-hosted GLM agentic runs. agy
-  returns clean markdown — nothing to strip. GLM CLI captures carry spinner ANSI
-  noise (use `grep -a`, or capture via the local API for clean JSON).
+  whole transcript. `cursor-agent -p --output-format text` returns the final
+  answer only — nothing to strip, but byte-count it (gotcha 4 above).
 
 ## Announcement protocol
 
@@ -544,7 +549,8 @@ When this skill fires a route the user did NOT explicitly ask for (risk-path for
 adversarial, failure-counter rescue), announce in one line BEFORE running so the
 user can interrupt. For routes the user explicitly asked for ("check this", "tear it
 apart"), just do it. End cross-model replies with a one-line route trailer:
-`(Routed via cross-model-review → GPT.)`, `→ Gemini.`, `→ GLM.`, or `→ panel.`.
+`(Routed via cross-model-review → Sol.)`, `→ Grok.`, `→ GLM.`,
+`→ Gemini (media).`, or `→ panel.`.
 
 ## Stay-asleep rules
 
@@ -567,5 +573,10 @@ panel-for-open-ended-consensus (diversity-dominated); everything else (scan gate
 rubric, taxonomy, validator, rescue, risk paths) is supporting machinery. Operator-
 local skill — drop the folder into `$CLAUDE_CONFIG_DIR/skills/cross-model-review/`
 (no compile step). 2026-07-10: GLM-5.2 (Ollama Cloud) added as the third equal
-critic family (QUE-427) — packet + long-context + agentic lanes verified live;
-transport guide in the vault wiki.
+critic family (QUE-427). 2026-08-24 (QUE-577): **panel v3** — GLM retired for
+now; roster is Sol (Codex CLI) + Grok 4.6 (Cursor agent CLI) + Kimi K3 (Ollama
+Cloud), all three lanes smoke-verified headless and read-only at adoption.
+Gemini (agy) left the panel the same day but was retained as the
+video/audio/large-PDF media specialist (operator decision, same session). 2026-08-27 (QUE-580): **panel v4** — Kimi K3
+retired; GLM returns as GLM 5.3 Flash (`glm-5.3-flash:cloud`, 1M context +
+vision), headless pipe smoke-verified at adoption.
