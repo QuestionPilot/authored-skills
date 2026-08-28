@@ -87,7 +87,7 @@ dir, web, or shell access at all** — the packet is the critic's entire world:
 ```bash
 { printf '%s\n\n' "<no-go preamble + the same review prompt as above>"; \
   cat "$rundir/input-diff.patch"; } | \
-  ollama run glm-5.3-flash:cloud --think high --hidethinking > "$rundir/glm-review.md"
+  ollama run glm-5.3-flash:cloud --think=high --hidethinking > "$rundir/glm-review.md"
 # Clean-capture alternative (no TTY spinner noise in the output): POST the same
 # combined prompt to localhost:11434/api/generate with "stream":false,"think":"high" —
 # the .response JSON field is the review (reasoning arrives in a separate
@@ -224,7 +224,7 @@ these tags per call; do not silently substitute:
 | --- | --- | --- |
 | GPT Sol | `codex` | `-m gpt-5.6-sol -c model_reasoning_effort="high"` |
 | Grok | `cursor-agent` | `--model cursor-grok-4.6-high-fast` |
-| GLM | `ollama` | `glm-5.3-flash:cloud --think high` |
+| GLM | `ollama` | `glm-5.3-flash:cloud --think=high` |
 
 When a pinned tag stops resolving (Ollama retires cloud tags on a schedule;
 Cursor and Codex rotate model lists), **check the CLI's live model list**
@@ -299,7 +299,7 @@ cat <context-bundle> | codex exec --skip-git-repo-check -s read-only \
   -m gpt-5.6-sol -c model_reasoning_effort="high" \
   "Rescue. Driver tried 2× and failed. Full context attached. Solve from scratch."
 # Any eligible family works — GLM takes the same bundle:
-#   cat <context-bundle> | ollama run glm-5.3-flash:cloud --think high --hidethinking
+#   cat <context-bundle> | ollama run glm-5.3-flash:cloud --think=high --hidethinking
 ```
 
 Reset only when the test/build passes, the goal changes, or the user says "keep trying."
@@ -384,12 +384,12 @@ Gemini media lane below.
 # Whole-repo / huge-packet text review — stage, scan, pipe the whole packet:
 { printf '%s\n\n' "<no-go preamble: critique clause> <prompt — file:line findings grouped by directory>"; \
   cat "$rundir/input-repo-packet.txt"; } | \
-  ollama run glm-5.3-flash:cloud --think high --hidethinking > "$rundir/glm-review.md"
+  ollama run glm-5.3-flash:cloud --think=high --hidethinking > "$rundir/glm-review.md"
 
 # Image review — stage the image into the run dir first (scan gate applies to
 # staged packets; never point the critic at a live path outside the run dir):
 cp /path/shot.png "$rundir/input-shot.png"
-ollama run glm-5.3-flash:cloud --think high --hidethinking \
+ollama run glm-5.3-flash:cloud --think=high --hidethinking \
   "<no-go preamble: specialist clause> Describe and critique the UI in $rundir/input-shot.png — one finding per line, end with VERDICT." \
   > "$rundir/glm-review.md"
 ```
@@ -405,6 +405,15 @@ ollama run glm-5.3-flash:cloud --think high --hidethinking \
 4. The packet lane is **structurally tool-free** (nothing to sandbox); if a run
    ever needs GLM agentic, use the Codex harness with an Ollama provider pin —
    every codex invariant applies unchanged.
+5. **Flag syntax: `--think=high` with the equals sign.** `--think` declares a
+   no-opt default (`string[="true"]`), so space-form `--think high` leaves the
+   level at default and injects the literal word `high` into the PROMPT (proven
+   by echo probe 2026-08-27). Same for `--think=false`.
+6. **Empty `glm-review.md` + HTTP 200 in `~/.ollama/logs/server.log` = all
+   thinking, no final answer** (long run spent its output budget inside the
+   hidden thinking block; stderr shows only spinner frames). Not quota, not a
+   dead tag. Re-run once WITHOUT `--hidethinking` to capture what it said, then
+   strip the `<think>` block by hand.
 
 ## Media specialist lane — Gemini (agy), video / audio / large-PDF only
 
