@@ -106,8 +106,8 @@ bash scripts/check-drift.sh --auto
 
 **5. Mirror.** Copy the placed skill, content-identical, to every operator skill
 root — canonical `.claude/skills/`, mirrors `.codex/skills/`, `.agents/skills/`,
-`~/.cursor/skills/`. Hermes is deliberately out of scope. *Done when:* the vault
-gate `bash "$OBSIDIAN_VAULT_PATH/bin/operator-skill-parity-check.sh"` PASSES.
+`~/.cursor/skills/`. Hermes is deliberately out of scope. *Done when:* the parity
+gate `bash "/Users/hendohome/Agentic OS/scripts/operator-skill-parity-check.sh"` PASSES.
 
 **6. Vault.** Write or update the tool's guide in `10-Wiki/Entities/` (what it
 is, install command, auth, the vet verdict + tier, version/hash anchor, any
