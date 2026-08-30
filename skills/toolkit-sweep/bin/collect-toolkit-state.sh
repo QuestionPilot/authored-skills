@@ -127,20 +127,37 @@ else
 fi
 echo
 if command -v npm >/dev/null 2>&1; then
-  echo "### npm -g outdated"
-  npm_out=$(bounded 120 npm outdated -g </dev/null); npm_rc=$?
-  echo '```'
-  printf '%s\n' "$npm_out"
-  echo '```'
-  # npm outdated: rc=0 nothing outdated, rc=1 WITH table = outdated packages exist,
-  # rc=1 with empty output or any other rc = a failed probe, not a clean result.
-  if [ "$npm_rc" -eq 0 ]; then
-    echo "(npm probe ran, rc=0 — nothing outdated)"
-  elif [ "$npm_rc" -eq 1 ] && printf '%s\n' "$npm_out" | head -1 | grep -q '^Package'; then
-    echo "(npm probe ran, rc=1 with a table — the packages above are outdated)"
-  else
-    echo "UNPROBED: npm outdated failed or timed out (rc=$npm_rc) — the block above is NOT a clean result."
-  fi
+  # A machine can carry more than one global npm prefix (e.g. ~/.local AND the
+  # brew-node tree at /opt/homebrew) — sweeping only the configured one hid 6
+  # stale tools on the first live run. Enumerate every prefix that has a
+  # node_modules tree and probe each.
+  default_prefix=$(npm config get prefix 2>/dev/null)
+  prefixes="$default_prefix"
+  for extra in /opt/homebrew /usr/local; do
+    [ -d "$extra/lib/node_modules" ] && [ "$extra" != "$default_prefix" ] && prefixes="$prefixes
+$extra"
+  done
+  n_prefixes=$(printf '%s\n' "$prefixes" | grep -c . || true)
+  echo "npm prefixes probed: $n_prefixes ($(printf '%s' "$prefixes" | tr '\n' ' '))"
+  echo
+  printf '%s\n' "$prefixes" | while IFS= read -r pfx; do
+    [ -n "$pfx" ] || continue
+    echo "### npm outdated -g (prefix: $pfx)"
+    npm_out=$(bounded 120 npm --prefix "$pfx" outdated -g </dev/null); npm_rc=$?
+    echo '```'
+    printf '%s\n' "$npm_out"
+    echo '```'
+    # npm outdated: rc=0 nothing outdated, rc=1 WITH table = outdated packages
+    # exist, anything else = a failed probe, not a clean result.
+    if [ "$npm_rc" -eq 0 ]; then
+      echo "(npm probe ran, rc=0 — nothing outdated in this prefix)"
+    elif [ "$npm_rc" -eq 1 ] && printf '%s\n' "$npm_out" | head -1 | grep -q '^Package'; then
+      echo "(npm probe ran, rc=1 with a table — the packages above are outdated)"
+    else
+      echo "UNPROBED: npm outdated failed or timed out (rc=$npm_rc) for prefix $pfx — NOT a clean result."
+    fi
+    echo
+  done
 else
   echo "npm: not installed — 0 packages probed (UNPROBED as a surface)"
 fi
