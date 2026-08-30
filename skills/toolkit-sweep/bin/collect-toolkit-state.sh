@@ -10,12 +10,17 @@
 # the alarm kills the exec'd process, not descendants it may spawn — a probe
 # that forks a child holding stdout can still stall the capture; stdin is
 # closed on every probe to narrow that window. A probe that fails or times
-# out is reported UNPROBED — never clean.
+# out is reported UNPROBED — never clean. Accepted residual: enumeration is
+# newline-delimited, so a filename containing a literal newline would corrupt
+# rows/denominators — no such name belongs in a skills root or bin dir.
 set -u
 LC_ALL=C; export LC_ALL
 
 PROBE_SECS="${PROBE_SECS:-10}"
-case "$PROBE_SECS" in (''|*[!0-9]*|0) echo "invalid PROBE_SECS='$PROBE_SECS' (need positive integer)" >&2; exit 2;; esac
+case "$PROBE_SECS" in (''|*[!0-9]*) PROBE_SECS=bad;; esac
+if [ "$PROBE_SECS" = bad ] || [ "${#PROBE_SECS}" -gt 4 ] || [ "$PROBE_SECS" -le 0 ]; then
+  echo "invalid PROBE_SECS (need positive integer 1-9999)" >&2; exit 2
+fi
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 CANONICAL="${CANONICAL:-$HOME/Agentic OS/.claude/skills}"
 PARITY_SCRIPT="${PARITY_SCRIPT:-$HOME/Agentic OS/scripts/operator-skill-parity-check.sh}"
@@ -50,7 +55,7 @@ echo
 echo "## Mirror parity"
 echo
 if [ -f "$PARITY_SCRIPT" ]; then
-  parity_out=$(bounded 120 bash "$PARITY_SCRIPT"); parity_rc=$?
+  parity_out=$(bounded 120 bash "$PARITY_SCRIPT" </dev/null); parity_rc=$?
   echo '```'
   printf '%s\n' "$parity_out"
   echo '```'
@@ -108,7 +113,7 @@ echo "## Package-manager views (staleness raw material — registry queries)"
 echo
 if command -v brew >/dev/null 2>&1; then
   echo "### brew outdated"
-  brew_out=$(bounded 120 brew outdated --verbose); brew_rc=$?
+  brew_out=$(bounded 120 brew outdated --verbose </dev/null); brew_rc=$?
   echo '```'
   printf '%s\n' "$brew_out"
   echo '```'
@@ -123,7 +128,7 @@ fi
 echo
 if command -v npm >/dev/null 2>&1; then
   echo "### npm -g outdated"
-  npm_out=$(bounded 120 npm outdated -g); npm_rc=$?
+  npm_out=$(bounded 120 npm outdated -g </dev/null); npm_rc=$?
   echo '```'
   printf '%s\n' "$npm_out"
   echo '```'
@@ -131,7 +136,7 @@ if command -v npm >/dev/null 2>&1; then
   # rc=1 with empty output or any other rc = a failed probe, not a clean result.
   if [ "$npm_rc" -eq 0 ]; then
     echo "(npm probe ran, rc=0 — nothing outdated)"
-  elif [ "$npm_rc" -eq 1 ] && [ -n "$npm_out" ]; then
+  elif [ "$npm_rc" -eq 1 ] && printf '%s\n' "$npm_out" | head -1 | grep -q '^Package'; then
     echo "(npm probe ran, rc=1 with a table — the packages above are outdated)"
   else
     echo "UNPROBED: npm outdated failed or timed out (rc=$npm_rc) — the block above is NOT a clean result."

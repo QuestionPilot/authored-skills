@@ -45,7 +45,7 @@ is owed. `TS=<absolute path of the directory containing THIS SKILL.md>`.
 
 ```bash
 mkdir -p "$HOME/toolkit-sweep-out" \
-  && bash "$TS/bin/collect-toolkit-state.sh" > "$HOME/toolkit-sweep-out/$(date -u +%Y-%m-%dT%H%M)-state.md"
+  && bash "$TS/bin/collect-toolkit-state.sh" > "$HOME/toolkit-sweep-out/$(date -u +%Y-%m-%dT%H%M%S)-state.md"
 ```
 
 The collector enumerates the canonical skills root, runs the mirror-parity
