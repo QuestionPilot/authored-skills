@@ -89,8 +89,13 @@ cp -R "<vetted-source>/<name>" "/Users/hendohome/Agentic OS/.claude/skills/<name
 ```
 
 Modify only where step 2 said to (trim, fix stale paths, scope the trigger) —
-and record each deviation. *Done when:* the files are placed and the placement
-command is reproducible from the vault guide.
+and record each deviation. A vendor post-install step that touches the operator's
+machine (shell integration, `<tool> config … install`, first-run setup) runs with
+stdin closed and the tool's non-interactive flag (`--yes` / `-y` / `--no-input`),
+and its exit code is read: under an agent shell the prompt exits "Cancelled" and
+looks like success. Diff the rc file before/after and record the exact line it
+wrote. *Done when:* the files are placed and the placement command is
+reproducible from the vault guide.
 
 **4. Catalog.** Add the row to the operator overlay — never the rendered
 `SKILLS.md`:

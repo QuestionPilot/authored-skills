@@ -118,23 +118,32 @@ accepting it.
 ## Stage 7 — Push + PR + CI
 
 ```bash
-git push -u origin HEAD          # from $CLONE only
-gh pr create --fill
-gh pr checks --watch
+git push -u origin HEAD < /dev/null              # from $CLONE only
+gh pr create --fill < /dev/null
+gh pr checks --watch --interval 30 < /dev/null   # background it; it runs 10–20 min
 ```
 
-**Done when:** all 6 CI lanes are green. Red lane → fix in `$CLONE`, return to
+Every git/gh step here runs with stdin closed and one step per tool call: in an
+agent shell an open stdin makes `gh pr merge` / `git pull` block on a prompt
+until the harness timeout, and a chained command then hides which step ran.
+Bound anything that may wait (`perl -e 'alarm N; exec @ARGV' <cmd>` — macOS has
+no `timeout`), and after ANY timed-out step re-read real state (PR state, HEAD)
+before retrying. **Done when:** all 6 CI lanes are green. Red lane → fix in `$CLONE`, return to
 Stage 3 (re-verify), then re-push.
 
 ## Stage 8 — Squash-merge + living-folder fast-forward
 
 ```bash
-gh pr merge --squash --delete-branch
-cd "<living-folder>" && git pull            # pull only, never push
+perl -e 'alarm 120; exec @ARGV' gh pr merge <N> --squash --delete-branch < /dev/null
+# living folder — fetch + ff-merge, never `git pull` (it prompts), never push:
+cd "<living-folder>" && git fetch origin main < /dev/null && git merge --ff-only origin/main < /dev/null
 bash scripts/install.sh --harness claude --harness codex   # only if renders changed
-bash scripts/check-drift.sh --auto
-bash "$FS/bin/check-ship-gates.sh" --stage post-merge --repo "<living-folder>"
+bash scripts/check-drift.sh --auto < /dev/null
+bash "$FS/bin/check-ship-gates.sh" --stage post-merge --repo "<living-folder>" < /dev/null
 ```
+
+Run these as separate tool calls, not one `&&` chain — a chain that times out
+leaves the PR merged but the living folder behind, with no line saying so.
 
 **Done when:** drift is clean across every rendered harness home and the
 post-merge gate exits 0.
