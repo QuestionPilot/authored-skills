@@ -137,13 +137,18 @@ Stage 3 (re-verify), then re-push.
 perl -e 'alarm 120; exec @ARGV' gh pr merge <N> --squash --delete-branch < /dev/null
 # living folder — fetch + ff-merge, never `git pull` (it prompts), never push:
 cd "<living-folder>" && git fetch origin main < /dev/null && git merge --ff-only origin/main < /dev/null
-bash scripts/install.sh --harness claude --harness codex   # only if renders changed
+bash scripts/install.sh --harness claude --harness codex --harness hermes --harness cursor   # whenever the diff touched capabilities/ or harnesses/
 bash scripts/check-drift.sh --auto < /dev/null
 bash "$FS/bin/check-ship-gates.sh" --stage post-merge --repo "<living-folder>" < /dev/null
 ```
 
 Run these as separate tool calls, not one `&&` chain — a chain that times out
 leaves the PR merged but the living folder behind, with no line saying so.
+`check-drift.sh` compares each render to its manifest, not to the source, so it
+PASSES over a stale render: after any merge that touched `capabilities/` or
+`harnesses/`, re-render every harness, then grep one phrase from the diff in a
+rendered skill body (`rg -c '<phrase>' "$CLAUDE_CONFIG_DIR/skills/<cap>/SKILL.md"`)
+before calling drift clean.
 
 **Done when:** drift is clean across every rendered harness home and the
 post-merge gate exits 0.
