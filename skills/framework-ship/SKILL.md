@@ -100,13 +100,22 @@ Quiesce the tree first (nothing else writing into the clone), then:
 
 ```bash
 set -a; . "$CLONE/local.env"; set +a   # check-clean reads COMMIT_IDENTITY_ALLOWLIST from env — without it the identity scan silently SKIPs
-bash "$CLONE/scripts/check-clean.sh" > "$LOGS/check-clean.log" 2>&1; echo "rc=$?"
+cd "$CLONE" && bash scripts/check-clean.sh > "$LOGS/check-clean.log" 2>&1; echo "rc=$?"
+tail -1 "$LOGS/check-clean.log"; git -C "$CLONE" rev-list --count origin/main..HEAD   # the two commit counts must match
 bash "$FS/bin/check-ship-gates.sh" --stage pre-push --repo "$CLONE" \
   --local-env "$CLONE/local.env" \
   --verify-log "$LOGS/verify.log" --check-clean-log "$LOGS/check-clean.log" \
   --verify-marker "PASS drift and portability checks" \
   --check-clean-marker "PASS check-clean"
 ```
+
+`check-clean.sh` scans its **current directory**, not the path you invoke it by —
+and this harness resets the shell cwd between tool calls, so `bash
+"$CLONE/scripts/check-clean.sh"` from the living folder scans the living folder
+and prints a PASS the gate accepts. The tell is on the PASS line: `N branch
+commit(s) message-scanned` must equal `git rev-list --count origin/main..HEAD`;
+`0` on a branch with commits means the wrong tree was scanned (first seen
+2026-09-04). The `cd "$CLONE" &&` is part of the command, not decoration.
 
 The marker flags are load-bearing: the gate's default marker is the literal
 `PASSED`, which matches NEITHER `make verify`'s output (its final gate prints

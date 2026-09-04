@@ -34,6 +34,11 @@ The framework's preferred delegated-execution split applies to this flow:
 - **Panel fixes round-trip to the same lane.** Send Stage-4 findings back to the
   executor that wrote the code rather than opening a second lane — a second lane
   re-derives context the first already holds and the two diverge on the same file.
+  When the harness cannot resume a finished lane (no `SendMessage` — the desktop
+  app is one such variant), open a fresh lane whose brief restates the facts the
+  first lane verified and tells it to start from `git diff`, and note the
+  deviation in `reconciled.md`; two or three phrase-level fixes may be applied by
+  the driver directly, followed by the driver's own re-verify.
 - Worktree isolation rules apply: branch work in a worktree, the shared checkout
   stays on the default branch, no mid-flight renders of the live harness homes,
   and re-read the memory index and tracker immediately before any write.
