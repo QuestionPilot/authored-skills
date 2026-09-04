@@ -85,8 +85,14 @@ git -c user.name="<Published Name>" \
 git log --format='%h A:%an <%ae> C:%cn <%ce>' origin/main..HEAD   # both fields
 ```
 
-**Done when:** every commit ahead of `origin/main` shows author AND committer on
-the `COMMIT_IDENTITY_ALLOWLIST`.
+The commit message (subject AND body) carries no tracker ID — Stage 6's
+`check-clean` scans the whole message of every commit ahead of `origin/main` and
+bounces one that does; the ID belongs in the tracker comment and the run-dir
+name.
+
+**Done when:** every commit ahead of `origin/main` shows author AND committer
+both on the `COMMIT_IDENTITY_ALLOWLIST`, and
+`git log --format=%B origin/main..HEAD` shows no tracker ID in any message.
 
 ## Stage 6 — Pre-push gate (deterministic)
 
@@ -163,11 +169,16 @@ post-merge gate exits 0.
 
 ## Stage 9 — Close
 
-Set the tracker issue to Done with an evidence comment (PR link, verify rc,
-panel outcome, drift result). If the session created/closed a project or a new
-durable artifact directory, invoke `closeout` and write the **State Deltas**
-during closeout, not deferred. **Done when:** the issue is Done and any State
-Delta is written.
+Post the evidence comment (PR link, verify rc, panel outcome, drift result) with
+`linear issue comment add <id> --body-file <path>`. Then re-read it with
+`linear issue comment list <id>` and confirm the listing contains a phrase
+unique to the NEW comment — the PR URL: a wrong subcommand prints help and
+exits 0, so help text, or a listing carrying only older comments, means the
+write did not land — post again. Only then set the tracker issue to Done. If
+the session created/closed a project or a new durable artifact directory,
+invoke `closeout` and write the **State Deltas** during closeout, not deferred.
+**Done when:** the re-read shows the new comment (PR link present), the issue
+is Done, and any State Delta is written.
 
 ## Cleanup
 
