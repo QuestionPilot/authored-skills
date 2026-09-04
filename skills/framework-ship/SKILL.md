@@ -139,8 +139,16 @@ perl -e 'alarm 120; exec @ARGV' gh pr merge <N> --squash --delete-branch < /dev/
 cd "<living-folder>" && git fetch origin main < /dev/null && git merge --ff-only origin/main < /dev/null
 bash scripts/install.sh --harness claude --harness codex --harness hermes --harness cursor   # whenever the diff touched capabilities/ or harnesses/
 bash scripts/check-drift.sh --auto < /dev/null
-bash "$FS/bin/check-ship-gates.sh" --stage post-merge --repo "<living-folder>" < /dev/null
+bash "$FS/bin/check-ship-gates.sh" --stage post-merge --repo "<living-folder>" \
+  --local-env "<living-folder>/local.env" < /dev/null
 ```
+
+The post-merge gate's `renders-current` check runs `install.sh --harness <h>
+--dry-run` against every configured render home and FAILs on a stale one — so it
+catches the re-render you skipped, which `check-drift` structurally cannot.
+`--local-env` defaults to `<repo>/local.env`, which is already the right file
+when `--repo` is the living folder; pass it explicitly anyway so the gate and
+`install.sh` read the same one.
 
 Run these as separate tool calls, not one `&&` chain — a chain that times out
 leaves the PR merged but the living folder behind, with no line saying so.

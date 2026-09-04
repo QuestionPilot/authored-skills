@@ -194,6 +194,216 @@ RC=$?
 assert_exit 1 $RC "H: HEAD diverged from origin exits 1"
 assert_gate "$OUT" head-matches-origin FAIL "H: head-matches-origin FAIL"
 
+# ---------------------------------------------------------------- renders-current
+#
+# The fixture repo carries a FAKE scripts/install.sh that prints a --dry-run
+# report in install.sh's exact format, driven by scripts/.dryrun-state. That
+# covers the PARSER and the verdict wiring only — that the gate reads stale/
+# broken/missing correctly, names the first stale file, treats a non-zero exit
+# as FAIL and an unconfigured home as SKIP. It says nothing about the REAL
+# install.sh's output staying in that shape; the live post-merge run against the
+# framework checkout is what covers that half, and must be re-run if
+# classify_state's report format ever changes.
+#
+# The gate resolves homes from the ENVIRONMENT first (check-drift --auto's
+# order), so every invocation below runs with the operator's real harness vars
+# stripped — otherwise a developer's live $CLAUDE_CONFIG_DIR would hijack the
+# fixture.
+gates_noenv() {
+  env -u CLAUDE_CONFIG_DIR -u CODEX_HOME -u HERMES_HOME -u CURSOR_CONFIG_DIR \
+      -u AGENTS_DIR bash "$GATES" "$@"
+}
+
+# Fake install.sh: reproduces classify_state's report shape byte-for-byte for
+# the lines the gate parses. `target` is echoed from the state file so the
+# gate's target-agreement check sees what it expects.
+write_fake_install() { # <repo>
+  mkdir -p "$1/scripts"
+  cat > "$1/scripts/install.sh" <<'FAKE'
+#!/usr/bin/env bash
+# FAKE install.sh — fixture double for scripts/install.sh --dry-run.
+mode=insync; target=""; stale_file="skills/closeout/SKILL.md"
+sf="$(cd "$(dirname "$0")" && pwd)/.dryrun-state"
+[ -f "$sf" ] && . "$sf"
+h=claude
+while [ $# -gt 0 ]; do
+  case "$1" in --harness) h="${2:-}"; shift 2 ;; *) shift ;; esac
+done
+if [ "$mode" = exit3 ]; then
+  printf 'install.sh: simulated blow-up\n' >&2
+  exit 3
+fi
+# nobanner: an in-sync report with the target line REMOVED — the gate must not
+# read counts out of a report shape it cannot confirm belongs to this target.
+if [ "$mode" != nobanner ]; then
+  printf 'install.sh: dry-run state for %s at %s\n' "$h" "$target"
+fi
+if [ "$mode" = missing ]; then
+  printf '  managed: 8  (present and current)\n'
+  printf '  stale:   0  (an install would UPDATE — framework moved on)\n'
+  printf '  broken:  0  (modified/corrupted on disk — an install would overwrite)\n'
+  printf '  missing: 1  (absent — an install would create)\n'
+  printf '    - hooks/stuck-detector.sh\n'
+  printf '  custom:  2  (operator skills/plugins — PRESERVED, never clobbered)\n'
+  printf 'install.sh: re-run without --dry-run to reconcile managed files (custom content is preserved).\n'
+elif [ "$mode" = stale ]; then
+  printf '  managed: 8  (present and current)\n'
+  printf '  stale:   1  (an install would UPDATE — framework moved on)\n'
+  printf '    - %s\n' "$stale_file"
+  printf '  broken:  0  (modified/corrupted on disk — an install would overwrite)\n'
+  printf '  missing: 0  (absent — an install would create)\n'
+  printf '  custom:  2  (operator skills/plugins — PRESERVED, never clobbered)\n'
+  printf 'install.sh: re-run without --dry-run to reconcile managed files (custom content is preserved).\n'
+else
+  printf '  managed: 9  (present and current)\n'
+  printf '  stale:   0  (an install would UPDATE — framework moved on)\n'
+  printf '  broken:  0  (modified/corrupted on disk — an install would overwrite)\n'
+  printf '  missing: 0  (absent — an install would create)\n'
+  printf '  custom:  2  (operator skills/plugins — PRESERVED, never clobbered)\n'
+  printf 'install.sh: target is in sync with the current framework.\n'
+fi
+printf 'install.sh: no changes written (dry-run).\n'
+FAKE
+}
+
+# Commit + push so worktree-clean and head-matches-origin stay green while the
+# fixture flips state between cases.
+sync_fixture() { # <repo> <message>
+  (
+    cd "$1" || exit 1
+    git add -A
+    git_c commit -q -m "$2"
+    git push -q origin main
+  )
+}
+
+echo "== fixture I: renders-current, home in sync =="
+I=$(make_repo repo_i) || exit 1
+I_HOME="$ROOT/home_i"
+mkdir -p "$I_HOME"
+printf '{"harness":"claude","generated":{}}\n' > "$I_HOME/.build-manifest.json"
+write_fake_install "$I"
+printf 'mode=insync\ntarget=%s\n' "$I_HOME" > "$I/scripts/.dryrun-state"
+printf 'CLAUDE_CONFIG_DIR="%s"\n' "$I_HOME" >> "$I/local.env"
+sync_fixture "$I" "fixture: fake install.sh + rendered home" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$I" --default-branch main \
+  --local-env "$I/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 0 $RC "I: in-sync render exits 0"
+assert_gate "$OUT" renders-current PASS "I: renders-current PASS"
+if printf '%s\n' "$OUT" | grep -q 'claude .*: in sync'; then
+  pass "I: PASS line names the harness and 'in sync'"
+else
+  fail "I: PASS line names the harness and 'in sync' -- got:
+$OUT"
+fi
+# Unconfigured homes are LOUD skips, never silently absent.
+if [ "$(printf '%s\n' "$OUT" | grep -c '^GATE renders-current  *SKIP')" -eq 4 ]; then
+  pass "I: 4 unset homes each emit their own SKIP line"
+else
+  fail "I: expected 4 SKIP lines for unset homes -- got:
+$OUT"
+fi
+
+echo "== fixture J: renders-current, one stale file =="
+printf 'mode=stale\ntarget=%s\n' "$I_HOME" > "$I/scripts/.dryrun-state"
+sync_fixture "$I" "fixture: flip dry-run state to stale" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$I" --default-branch main \
+  --local-env "$I/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 1 $RC "J: stale render exits 1"
+assert_gate "$OUT" renders-current FAIL "J: renders-current FAIL"
+if printf '%s\n' "$OUT" | grep -q 'stale=1 broken=0 missing=0'; then
+  pass "J: FAIL line carries the parsed counts"
+else
+  fail "J: FAIL line carries the parsed counts -- got:
+$OUT"
+fi
+if printf '%s\n' "$OUT" | grep -q 'first stale: skills/closeout/SKILL.md'; then
+  pass "J: FAIL line names the first stale file"
+else
+  fail "J: FAIL line names the first stale file -- got:
+$OUT"
+fi
+if printf '%s\n' "$OUT" | grep -qE '^VERDICT: FAIL'; then pass "J: VERDICT FAIL line"; else fail "J: VERDICT FAIL line"; fi
+
+echo "== fixture K: unconfigured home is SKIP, not PASS or FAIL =="
+K=$(make_repo repo_k) || exit 1
+write_fake_install "$K"
+printf 'mode=insync\ntarget=/nonexistent\n' > "$K/scripts/.dryrun-state"
+sync_fixture "$K" "fixture: fake install.sh, no harness vars in local.env" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$K" --default-branch main \
+  --local-env "$K/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 0 $RC "K: all-unset homes do not fail the verdict"
+assert_gate "$OUT" renders-current SKIP "K: renders-current SKIP"
+if printf '%s\n' "$OUT" | grep -q 'GATE renders-current  *PASS'; then
+  fail "K: an unset home must not report PASS -- got:
+$OUT"
+else
+  pass "K: no PASS line for an unset home"
+fi
+
+echo "== fixture L: a non-zero dry-run is FAIL, never a silent PASS =="
+printf 'mode=exit3\ntarget=%s\n' "$I_HOME" > "$I/scripts/.dryrun-state"
+sync_fixture "$I" "fixture: flip dry-run state to exit3" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$I" --default-branch main \
+  --local-env "$I/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 1 $RC "L: dry-run exiting 3 fails the verdict"
+assert_gate "$OUT" renders-current FAIL "L: renders-current FAIL"
+if printf '%s\n' "$OUT" | grep -q 'exited 3'; then
+  pass "L: FAIL line names the exit code"
+else
+  fail "L: FAIL line names the exit code -- got:
+$OUT"
+fi
+
+echo "== fixture N: a dry-run with no target banner is FAIL, not a pass =="
+# The counts alone are not enough: with no "dry-run state for <h> at <target>"
+# line the gate cannot confirm the report describes the home it resolved.
+printf 'mode=nobanner\ntarget=%s\n' "$I_HOME" > "$I/scripts/.dryrun-state"
+sync_fixture "$I" "fixture: flip dry-run state to nobanner" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$I" --default-branch main \
+  --local-env "$I/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 1 $RC "N: missing target banner fails the verdict"
+assert_gate "$OUT" renders-current FAIL "N: renders-current FAIL"
+if printf '%s\n' "$OUT" | grep -q "no 'dry-run state for' target line"; then
+  pass "N: FAIL line names the absent banner"
+else
+  fail "N: FAIL line names the absent banner -- got:
+$OUT"
+fi
+
+echo "== fixture O: stale=0 falls back to naming the first missing file =="
+printf 'mode=missing\ntarget=%s\n' "$I_HOME" > "$I/scripts/.dryrun-state"
+sync_fixture "$I" "fixture: flip dry-run state to missing" || exit 1
+OUT=$(gates_noenv --stage post-merge --repo "$I" --default-branch main \
+  --local-env "$I/local.env" --no-fetch 2>&1)
+RC=$?
+assert_exit 1 $RC "O: a missing managed file fails the verdict"
+assert_gate "$OUT" renders-current FAIL "O: renders-current FAIL"
+if printf '%s\n' "$OUT" | grep -q 'stale=0 broken=0 missing=1'; then
+  pass "O: FAIL line carries the parsed counts"
+else
+  fail "O: FAIL line carries the parsed counts -- got:
+$OUT"
+fi
+if printf '%s\n' "$OUT" | grep -q 'first missing: hooks/stuck-detector.sh'; then
+  pass "O: FAIL line names the first missing file (stale-list fallback)"
+else
+  fail "O: FAIL line names the first missing file -- got:
+$OUT"
+fi
+
+echo "== fixture M: a repo without scripts/install.sh SKIPs the gate =="
+# Fixtures G/H are exactly this shape — the gate must not turn them red.
+OUT=$(gates_noenv --stage post-merge --repo "$G" --default-branch main --no-fetch 2>&1)
+RC=$?
+assert_exit 0 $RC "M: no scripts/install.sh keeps the verdict PASS"
+assert_gate "$OUT" renders-current SKIP "M: renders-current SKIP (not a framework checkout)"
+
 echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "ALL TESTS PASSED"

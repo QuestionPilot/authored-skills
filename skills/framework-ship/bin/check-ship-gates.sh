@@ -15,7 +15,10 @@
 # and the verdict says so, which is visible in the log.
 #
 # No PowerShell twin: this is an operator-local skill script, not a shipped
-# framework `scripts/*.sh` gate.
+# framework `scripts/*.sh` gate. That waiver covers every gate in here, the
+# renders-current gate included — it shells out to the framework's own
+# scripts/install.sh, whose Windows twin (scripts/install.ps1) is where a
+# PowerShell operator's render-currency check would live.
 
 set -uo pipefail
 export LC_ALL=C
@@ -60,7 +63,19 @@ whose exit code reports tail, not verify.
 
 Gates, pre-push:   branch-not-default, worktree-clean, commit-identity,
                    verify-log, check-clean-log, twin-parity
-Gates, post-merge: on-default-branch, worktree-clean, head-matches-origin
+Gates, post-merge: on-default-branch, worktree-clean, head-matches-origin,
+                   renders-current
+
+renders-current runs `scripts/install.sh --harness <h> --dry-run` once per
+configured render home (claude/codex/hermes/cursor; homes resolved exactly like
+`scripts/check-drift.sh --auto` — env var first, then --local-env read as data)
+and FAILs when a home is stale/broken/missing against a fresh build of the
+merged tree. This is what `check-drift` cannot see: drift compares a home to the
+manifest it was RENDERED with, so a home left behind by a merge passes it.
+$AGENTS_DIR is SKIPped — `agents` is not an install.sh --harness value, it is
+the codex pass's .agents co-render, so a stale mirror shows up on the codex
+line. The gate SKIPs entirely when --repo has no scripts/install.sh. Read-only:
+--dry-run writes nothing.
 
 Exit 0 only when no gate FAILed. WARN and SKIP do not fail the verdict.
 EOF
@@ -302,6 +317,209 @@ EOF
   fi
 }
 
+# ------------------------------------------------- renders-current (post-merge)
+#
+# Post-merge the living folder can be fast-forwarded, worktree-clean and
+# drift-PASS while the rendered harness homes are BEHIND the merged source:
+# scripts/check-drift.sh compares a home against the manifest it was RENDERED
+# with, so a home rendered from an older commit passes its own gate. It took a
+# live miss (2026-09-04: "drift PASS" while five closeout renders were stale) to
+# make the gap visible. `install.sh --harness <h> --dry-run` compares the live
+# home against a FRESH build of the current tree and reports stale/broken/
+# missing — that is the check this gate runs, once per configured home.
+#
+# Home resolution mirrors scripts/check-drift.sh --auto exactly: the same
+# harness:VAR pairs, env var first, then local.env read as DATA (never sourced).
+#
+# _rc_localenv_get below is check-drift.sh's `_cd_localenv_get` copied VERBATIM
+# out of its --auto block — dedented by the two spaces that block indents it,
+# and renamed _cd_ -> _rc_ so the provenance is obvious. No other edit. If the
+# framework parser changes, re-copy this one; do not hand-patch it.
+
+# _rc_localenv_get <path> <key> — read one KEY=VALUE from local.env as DATA
+# (never sourced; a hostile or malformed local.env cannot execute). Same
+# parser as scripts/self-audit.sh::_sa_localenv_get: strips an optional
+# `export `, one matching outer quote pair, backslash escapes; last
+# assignment wins. No $VAR expansion — a self-referencing value resolves
+# literally and lands in the loud no-manifest skip path below.
+_rc_localenv_get() {
+  local path="$1" key="$2" line t v f l inner result=""
+  [ -f "$path" ] || { printf '%s' ""; return 0; }
+  while IFS= read -r line || [ -n "$line" ]; do
+    t="${line#"${line%%[![:space:]]*}"}"
+    t="${t%"${t##*[![:space:]]}"}"
+    [ -z "$t" ] && continue
+    case "$t" in '#'*) continue ;; esac
+    case "$t" in
+      export[[:space:]]*) t="${t#export}"; t="${t#"${t%%[![:space:]]*}"}" ;;
+    esac
+    case "$t" in
+      "$key="*) v="${t#"$key="}" ;;
+      *) continue ;;
+    esac
+    if [ "${#v}" -ge 2 ]; then
+      f="${v:0:1}"; l="${v:$(( ${#v} - 1 )):1}"
+      if { [ "$f" = '"' ] && [ "$l" = '"' ]; } || { [ "$f" = "'" ] && [ "$l" = "'" ]; }; then
+        inner=$(( ${#v} - 2 )); v="${v:1:$inner}"
+      else
+        case "$v" in
+          *'\'*) v="$(printf '%s' "$v" | sed -E 's/\\(.)/\1/g')" ;;
+        esac
+      fi
+    fi
+    result="$v"
+  done < "$path"
+  printf '%s' "$result"
+}
+
+# Same pair list, same order, as check-drift.sh --auto.
+RENDER_PAIRS="claude:CLAUDE_CONFIG_DIR codex:CODEX_HOME hermes:HERMES_HOME cursor:CURSOR_CONFIG_DIR agents:AGENTS_DIR"
+
+# `agents` is NOT an install.sh --harness value: harness_target_env() knows only
+# claude|codex|hermes|cursor and dies on anything else. $AGENTS_DIR is the codex
+# pass's .agents co-render (install.sh corender_agents), derived from the codex
+# target on a REAL install — so it cannot be dry-run on its own, and a stale
+# .agents implies a stale codex home, which the codex line above it reports.
+# Reported SKIP with that reason rather than guessed at.
+render_harness_valid() {
+  case "$1" in claude|codex|hermes|cursor) return 0 ;; *) return 1 ;; esac
+}
+
+# Read `  <key>: <n>  (...)` from a dry-run report. Empty when the line is absent.
+rc_count() { awk -v k="$2:" '$1==k {print $2; exit}' "$1" 2>/dev/null; }
+
+# First `    - <file>` entry under a given section of the report. Sections are
+# emitted in a fixed order (stale, broken, missing, custom) with their file
+# lists immediately following the count line.
+rc_first_file() {
+  awk -v want="$2" '
+    /^  stale:/   { sec="stale";   next }
+    /^  broken:/  { sec="broken";  next }
+    /^  missing:/ { sec="missing"; next }
+    /^  custom:/  { sec="";        next }
+    sec == want && /^    - / { print substr($0, 7); exit }
+  ' "$1" 2>/dev/null
+}
+
+gate_renders_current() {
+  if [ ! -f "scripts/install.sh" ]; then
+    emit SKIP renders-current "no scripts/install.sh under $(pwd -P) — not a framework checkout, render currency not provable here"
+    return
+  fi
+  _rc_env="$LOCAL_ENV"
+  [ -n "$_rc_env" ] || _rc_env="local.env"
+  case "$_rc_env" in /*) ;; *) _rc_env="$(pwd -P)/$_rc_env" ;; esac
+
+  # A private log dir or nothing: falling back to a predictable $TMPDIR path
+  # would let another process pre-create or read the dry-run logs.
+  _rc_logdir=$(mktemp -d -t ship-renders-XXXXXX 2>/dev/null) || _rc_logdir=""
+  if [ -z "$_rc_logdir" ]; then
+    emit FAIL renders-current "cannot create a private log dir (mktemp -d failed) — refusing the predictable \$TMPDIR fallback"
+    return
+  fi
+
+  for _rc_pair in $RENDER_PAIRS; do
+    _h="${_rc_pair%%:*}"; _var="${_rc_pair#*:}"
+    _dir="${!_var:-}"
+    _src="env"
+    if [ -z "$_dir" ] && [ -f "$_rc_env" ]; then
+      _dir=$(_rc_localenv_get "$_rc_env" "$_var")
+      _src="local.env"
+    fi
+    if [ -z "$_dir" ]; then
+      emit SKIP renders-current "$_h ($_var): unset in env and $_rc_env — harness not configured on this machine"
+      continue
+    fi
+    _dir="${_dir%/}"
+    if ! render_harness_valid "$_h"; then
+      emit SKIP renders-current "$_h $_dir: not an install.sh --harness target (.agents is the codex co-render, install.sh corender_agents) — a stale mirror implies a stale codex home, which the codex line covers"
+      continue
+    fi
+    # A resolved home with no manifest is NOT waved through: check-drift.sh
+    # --auto FAILs that case ("a deleted manifest is a hand-edit form"), and
+    # Stage 8 runs it before this gate. Nothing here to classify against, so
+    # SKIP — and say who does report it, so the line never reads as a pass.
+    if [ ! -f "$_dir/.build-manifest.json" ]; then
+      emit SKIP renders-current "$_h $_dir: no .build-manifest.json — nothing rendered to classify (check-drift --auto reports this case)"
+      continue
+    fi
+
+    _log="$_rc_logdir/renders-$_h.log"
+    # Bound the dry-run: macOS has no timeout(1). perl is present on macOS but
+    # not assumed — without it the dry-run runs unbounded (it is read-only and
+    # takes ~1s per harness in practice).
+    if command -v perl >/dev/null 2>&1; then
+      AI_CONFIG_LOCAL_ENV="$_rc_env" perl -e 'alarm 300; exec @ARGV' \
+        bash scripts/install.sh --harness "$_h" --dry-run > "$_log" 2>&1
+    else
+      AI_CONFIG_LOCAL_ENV="$_rc_env" \
+        bash scripts/install.sh --harness "$_h" --dry-run > "$_log" 2>&1
+    fi
+    _rc=$?
+
+    if [ $_rc -ne 0 ]; then
+      if [ $_rc -eq 142 ]; then
+        emit FAIL renders-current "$_h $_dir: dry-run KILLED at the 300s bound (exit 142); log: $_log"
+      else
+        emit FAIL renders-current "$_h $_dir: install.sh --dry-run exited $_rc; log: $_log"
+      fi
+      continue
+    fi
+
+    _stale=$(rc_count "$_log" stale)
+    _broken=$(rc_count "$_log" broken)
+    _missing=$(rc_count "$_log" missing)
+    # Each count must be present AND numeric: a partially-parsed report would
+    # otherwise reach the arithmetic tests below with an empty operand.
+    _nums=ok
+    for _n in "${_stale:-x}" "${_broken:-x}" "${_missing:-x}"; do
+      case "$_n" in *[!0-9]*) _nums="" ;; esac
+    done
+    if [ -z "$_nums" ]; then
+      emit FAIL renders-current "$_h $_dir: dry-run exited 0 but printed no stale/broken/missing report — unparseable, NOT a pass; log: $_log"
+      continue
+    fi
+
+    # install.sh resolves its target by SOURCING local.env, which overrides an
+    # inherited env var; this gate prefers the env var (check-drift --auto's
+    # order). When the two disagree the gate would be naming a home it did not
+    # actually classify — report that, never a PASS.
+    _reported=$(sed -n 's/^install\.sh: dry-run state for [^ ]* at //p' "$_log" | head -n 1)
+    _reported="${_reported%/}"
+    # No banner at all means the report shape is not the one this gate knows how
+    # to read — the counts it just parsed could belong to anything. Same verdict
+    # as unparseable counts: FAIL, never an assumed pass.
+    if [ -z "$_reported" ]; then
+      emit FAIL renders-current "$_h $_dir: dry-run exited 0 but printed no 'dry-run state for' target line — unparseable, NOT a pass; log: $_log"
+      continue
+    fi
+    _dir_cmp=$(CDPATH= cd "$_dir" 2>/dev/null && pwd || printf '%s' "$_dir")
+    _dir_cmp="${_dir_cmp%/}"
+    if [ "$_reported" != "$_dir_cmp" ] && [ "$_reported" != "$_dir" ]; then
+      emit FAIL renders-current "$_h $_dir: dry-run classified a DIFFERENT target ($_reported) — env/local.env disagree for $_var ($_src); log: $_log"
+      continue
+    fi
+
+    if [ "$_stale" -eq 0 ] && [ "$_broken" -eq 0 ] && [ "$_missing" -eq 0 ]; then
+      emit PASS renders-current "$_h $_dir: in sync"
+      rm -f "$_log"
+    else
+      _first=$(rc_first_file "$_log" stale)
+      _label="first stale"
+      if [ -z "$_first" ]; then
+        _first=$(rc_first_file "$_log" broken); _label="first broken"
+      fi
+      if [ -z "$_first" ]; then
+        _first=$(rc_first_file "$_log" missing); _label="first missing"
+      fi
+      [ -n "$_first" ] || { _first="(none listed)"; _label="first stale"; }
+      emit FAIL renders-current "$_h $_dir: stale=$_stale broken=$_broken missing=$_missing; $_label: $_first; log: $_log"
+    fi
+  done
+  rmdir "$_rc_logdir" 2>/dev/null
+  return 0
+}
+
 # ---------------------------------------------------------------------- drive
 
 printf 'check-ship-gates: stage=%s repo=%s default-branch=%s\n' \
@@ -318,6 +536,7 @@ else
   gate_on_default_branch
   gate_worktree_clean
   gate_head_matches_origin
+  gate_renders_current
 fi
 
 N_TOTAL=$((N_PASS + N_FAIL + N_WARN + N_SKIP))
