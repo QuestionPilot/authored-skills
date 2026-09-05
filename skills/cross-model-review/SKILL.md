@@ -189,12 +189,15 @@ Pin these operator-picked tags per call; never silently substitute:
 When a pinned tag stops resolving (Ollama retires cloud tags on a schedule; Cursor and Codex
 rotate model lists), **read the CLI's live model list** (`ollama show`, `cursor-agent models`,
 the Codex 400 error names it) and move to the named successor at the same or higher tier — warn
-the user, never silently degrade. The Codex CLI
-(ChatGPT account) has **no fast Astra tag**: `gpt-6-astra-fast` returns 400 "not supported when
-using Codex with a ChatGPT account" (verified 2026-09-05, codex-cli 0.153.4; `gpt-6-astra` itself
-needs codex-cli ≥ 0.153 — 0.151 returns 400 "requires a newer version"). A fast transport, if
-wanted, must be confirmed in `cursor-agent models` first (family distance lives in the model, not
-the CLI).
+the user, never silently degrade. `gpt-6-astra` itself needs
+codex-cli ≥ 0.153 — 0.151 returns 400 "requires a newer version". **Fast is a service tier, not a
+model suffix:** `-fast` model tags (`gpt-6-astra-fast`) return 400 on a ChatGPT account; the fast
+path is `-c service_tier="fast"` per run (or `/fast on` in the TUI; persist with `service_tier =
+"fast"` + `[features].fast_mode = true` in config.toml). Verified 2026-09-05 on codex-cli 0.153.4:
+Astra + `service_tier="fast"` answers with no tier warning, while `"priority"` is warned as
+unsupported for Astra and dropped. Fast mode spends ChatGPT credits (multiplier); with an API key
+Codex bills API tokens instead. Critic lanes run at the default tier unless a run explicitly wants
+speed.
 
 ## Grading critic findings — anchored rubric + suppression
 
