@@ -1,6 +1,6 @@
 ---
 name: cross-model-review
-description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for huge-packet / whole-repo / image / video / audio / large-PDF input (specialist lanes). Never review your own output — route to a different model family. The three critics are GPT Sol (via the Codex CLI), Grok (via the Cursor agent CLI), and GLM 5.3 Flash (via Ollama Cloud), equal first-class peers; Gemini (via the agy CLI) serves the video/audio/large-PDF media lane only, never the panel. Single critic for code review; panel→judge→synthesis for open-ended consensus.
+description: Use when the user asks to check / review / verify / audit / sanity-check / proof / second-opinion / critique / tear apart / find what's wrong with work Claude just produced. Also use when stuck or after 2× the same failure (rescue), when editing risky paths (auth/billing/secrets/infra — forced adversarial), or for huge-packet / whole-repo / image / video / audio / large-PDF input (specialist lanes). Never review your own output — route to a different model family. The three critics are GPT Astra (via the Codex CLI), Grok (via the Cursor agent CLI), and GLM 5.3 Flash (via Ollama Cloud), equal first-class peers; Gemini (via the agy CLI) serves the video/audio/large-PDF media lane only, never the panel. Single critic for code review; panel→judge→synthesis for open-ended consensus.
 ---
 
 # Cross-Model Review
@@ -10,7 +10,7 @@ sanity-check / tear-apart of work Claude just produced, route to a **different m
 Same-family review inherits the same blind spots — architectural distance is the point.
 
 The three critic families are **equal first-class peers**, **no capability hierarchy in any
-direction**: **GPT Sol** (the `codex` CLI), **Grok** (the `cursor-agent` CLI), and
+direction**: **GPT Astra** (the `codex` CLI), **Grok** (the `cursor-agent` CLI), and
 **GLM 5.3 Flash** (`glm-5.3-flash:cloud` via the `ollama` CLI / Ollama Cloud — 1M-token
 context, vision). Select by **role** (Claude drives, so it routes elsewhere) and **lane** (what
 the task needs), never by ranking. Gemini (`agy`) is the media specialist — video/audio/large-PDF
@@ -19,12 +19,12 @@ only, never a panelist and never a code critic. Images route to GLM (vision) or 
 ## Roles, eligibility, and count
 
 - **Driver** — Claude (this session); never a critic or panelist of its own output.
-- **Critics** — the non-Claude families: GPT Sol (Codex), Grok (Cursor), GLM (Ollama).
+- **Critics** — the non-Claude families: GPT Astra (Codex), Grok (Cursor), GLM (Ollama).
 - **Judge / synthesizer** — Claude, for multi-critic lanes. **The driver judges and is never
   a panelist of its own question.**
 
 **Eligibility (who *may* critique) is separate from count (how many *do*).** Eligibility is
-fixed here: critics = {Sol, Grok, GLM}. **Count is decided by the lane** — a verifiable
+fixed here: critics = {Astra, Grok, GLM}. **Count is decided by the lane** — a verifiable
 artifact (code, diffs) fires **one** critic, the default; an open-ended consensus question
 fires the **panel** (all available critics), only when the economics justify it.
 
@@ -40,7 +40,7 @@ directly, do not route it.
 
 ## The two critique lanes — one critic, different prompt
 
-A code/diff review fires **one** critic: **Sol (Codex)** for standard diffs, **GLM (Ollama)**
+A code/diff review fires **one** critic: **Astra (Codex)** for standard diffs, **GLM (Ollama)**
 for a large packet, **Grok (Cursor)** when agentic repo reading earns its keep (lanes below).
 Always pipe content via stdin where the CLI supports it; **never** tell a critic to "go read
 these files" outside a deliberately granted workspace (it hangs on approval round-trips).
@@ -54,9 +54,9 @@ Omit 0 and 25.*
 
 ```bash
 cat "$rundir/input-diff.patch" | codex exec --skip-git-repo-check -s read-only \
-  -m gpt-5.6-sol -c model_reasoning_effort="high" \
+  -m gpt-6-astra -c model_reasoning_effort="high" \
   "<no-go preamble: core + critique clause> Review this diff. For each finding: title, file:line, why-it-matters, and a <anchors>. Then Blocking risks / Missing tests. Be specific." \
-  > "$rundir/sol-review.md"
+  > "$rundir/astra-review.md"
 ```
 
 **Adversarial review** (on "tear this apart" / "stress test" / "prove it's broken", or
@@ -145,7 +145,7 @@ workspace, never the repo working tree (lane invariants below).
   covers content the critic fetches itself, which the input scan can't see.
 
 **Read-only is necessary, not sufficient** — it blocks writes, not reads. The read-side guard
-is the combination: **stdin-only packet (Sol, GLM) or one staged packet workspace (Grok), plus
+is the combination: **stdin-only packet (Astra, GLM) or one staged packet workspace (Grok), plus
 no web tools in critique.**
 
 ### No-go preamble (prepend to every critic invocation)
@@ -182,7 +182,7 @@ Pin these operator-picked tags per call; never silently substitute:
 
 | Family | CLI | Pinned invocation |
 | --- | --- | --- |
-| GPT Sol | `codex` | `-m gpt-5.6-sol -c model_reasoning_effort="high"` |
+| GPT Astra | `codex` | `-m gpt-6-astra -c model_reasoning_effort="high"` |
 | Grok | `cursor-agent` | `--model cursor-grok-4.6-high-fast` |
 | GLM | `ollama` | `glm-5.3-flash:cloud --think=high` |
 
@@ -190,9 +190,11 @@ When a pinned tag stops resolving (Ollama retires cloud tags on a schedule; Curs
 rotate model lists), **read the CLI's live model list** (`ollama show`, `cursor-agent models`,
 the Codex 400 error names it) and move to the named successor at the same or higher tier — warn
 the user, never silently degrade. The Codex CLI
-(ChatGPT account) has **no fast Sol tag**: `gpt-5.6-sol-fast` is rejected, and the fast variant
-exists only as Cursor's `gpt-5.6-sol-high-fast` transport, usable if a run explicitly wants it
-(family distance lives in the model, not the CLI).
+(ChatGPT account) has **no fast Astra tag**: `gpt-6-astra-fast` returns 400 "not supported when
+using Codex with a ChatGPT account" (verified 2026-09-05, codex-cli 0.153.4; `gpt-6-astra` itself
+needs codex-cli ≥ 0.153 — 0.151 returns 400 "requires a newer version"). A fast transport, if
+wanted, must be confirmed in `cursor-agent models` first (family distance lives in the model, not
+the CLI).
 
 ## Grading critic findings — anchored rubric + suppression
 
@@ -236,7 +238,7 @@ loop", not "missing timeout handling".
 ## Validator second-pass (high-stakes — optional)
 
 For risk-path forced adversarial or anything externalized (PR comments, autofix), run an
-independent second Sol pass per surviving `>= 75` finding. It **re-verifies, doesn't
+independent second Astra pass per surviving `>= 75` finding. It **re-verifies, doesn't
 re-reason** — answering only: real in the code as written? introduced by this diff? not
 already handled elsewhere? Pipe the same diff via stdin; prompt for
 `{"validated": true|false, "reason": "<one sentence>"}`; validate only if all three hold, and
@@ -251,7 +253,7 @@ MUST hand to a critic with full context:
 
 ```bash
 cat <context-bundle> | codex exec --skip-git-repo-check -s read-only \
-  -m gpt-5.6-sol -c model_reasoning_effort="high" \
+  -m gpt-6-astra -c model_reasoning_effort="high" \
   "Rescue. Driver tried 2× and failed. Full context attached. Solve from scratch."
 # Any eligible family works — GLM takes the same bundle:
 #   cat <context-bundle> | ollama run glm-5.3-flash:cloud --think=high --hidethinking
@@ -402,7 +404,7 @@ media). Always demand timestamps / page numbers / filenames — never a flat sum
 Only when the user explicitly invokes it ("ask all three", "before I commit", "cross-architecture
 consensus"). This lane is **diversity-dominated** — open-ended question, no CI backstop.
 
-- **Panelists** = all available non-driver families: Sol + Grok + GLM. Each answers the **same**
+- **Panelists** = all available non-driver families: Astra + Grok + GLM. Each answers the **same**
   question independently with structured output:
 
   ```
@@ -418,20 +420,20 @@ consensus"). This lane is **diversity-dominated** — open-ended question, no CI
   independence premise. Stage a private packet dir per critic, grant only it:
 
   ```bash
-  for critic in sol grok glm; do
+  for critic in astra grok glm; do
     mkdir -p "$rundir/$critic"; cp "$rundir"/input-* "$rundir/$critic/"
   done
-  # Sol panelist: pipe "$rundir/sol/<packet>" on stdin — no dir grant at all.
+  # Astra panelist: pipe "$rundir/astra/<packet>" on stdin — no dir grant at all.
   # Grok panelist: --workspace "$rundir/grok" — NEVER the shared "$rundir".
   # GLM panelist: pipe "$rundir/glm/<packet>" on stdin — structurally isolated
   # (ollama run has no file access; a dir grant is not even possible).
   ```
 
   Review files still land in the shared root via driver-side redirects
-  (`> "$rundir/sol-review.md"`, `> "$rundir/grok-review.md"`) — the judge reads the root, no
+  (`> "$rundir/astra-review.md"`, `> "$rundir/grok-review.md"`) — the judge reads the root, no
   critic can. Critics also read their own cwd, so never invoke one with its working directory
-  inside the shared run dir: launch Sol with cwd set to its own packet dir
-  (`cd "$rundir/sol" && cat input-* | codex exec …`). Record in `reconciled.md`: per-critic
+  inside the shared run dir: launch Astra with cwd set to its own packet dir
+  (`cd "$rundir/astra" && cat input-* | codex exec …`). Record in `reconciled.md`: per-critic
   dirs staged, and the Grok transcript shows no listing/read of the other critics' files.
 
 - **Judge / synthesizer** = **Claude**. Diff the answers — where they agree, where they
@@ -442,7 +444,7 @@ consensus"). This lane is **diversity-dominated** — open-ended question, no CI
 ## Startup self-check (once per session, before the first route)
 
 ```bash
-codex --version 2>&1 | head -1         # Sol critic CLI
+codex --version 2>&1 | head -1         # Astra critic CLI
 cursor-agent --version 2>&1 | head -1  # Grok critic CLI (auth: cursor-agent status)
 ollama --version 2>&1 | head -1        # GLM critic CLI
 ollama show glm-5.3-flash:cloud >/dev/null 2>&1 || \
@@ -460,7 +462,7 @@ continue with a smaller eligible set; do not retry every turn. `cursor-agent` li
 $CROSS_MODEL_OUT_DIR/<YYYY-MM-DD>-<slug>/
   ├── input-diff.patch — the scanned packet sent to the critic
   ├── <critic>/ — panel runs: per-critic packet dir (copy of input-*), the ONLY dir it is granted
-  ├── <critic>-review.md — critic output: sol-review.md / grok-review.md / glm-review.md
+  ├── <critic>-review.md — critic output: astra-review.md / grok-review.md / glm-review.md
   └── reconciled.md — Claude's synthesis
 ```
 
@@ -485,7 +487,7 @@ compounding ledger. Use the defaulted form: a bare `$CROSS_MODEL_OUT_DIR` resolv
 Announce an unasked-for route (risk-path forced adversarial, failure-counter rescue) in one line
 BEFORE running so the user can interrupt; a route the user asked for just runs. End cross-model
 replies with a one-line route trailer:
-`(Routed via cross-model-review → Sol.)`, `→ Grok.`, `→ GLM.`, `→ Gemini (media).`, or
+`(Routed via cross-model-review → Astra.)`, `→ Grok.`, `→ GLM.`, `→ Gemini (media).`, or
 `→ panel.`.
 
 ## Stay-asleep rules
