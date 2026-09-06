@@ -37,6 +37,8 @@ ownership receipt, not an alias — out of this skill's scope.
 
 ## Known limits
 
+- Astra confirmation review 2026-09-06 (`~/cross-model-out/2026-09-06-edgar-receipts-skill/`) drove the hardening round: one acceptance predicate (grade + verdict + SEC URL + fields + replay), word-boundary context words, best-occurrence grading, re-grading replay, SEC-only fetcher with redirect refusal and Retry-After, strict `--action` parsing. Left as documented limits: filer-token identity is heuristic; context is proximity; combining marks outside NFC are not handled; efts hits are relevance-ranked and un-paginated.
+
 - EDGAR full-text search covers 2001+ filings; a company that never touched an SEC
   filing (as filer or as a named party) yields `no_hit`.
 - The efts JSON carries no snippet, so every candidate document is fetched in full;

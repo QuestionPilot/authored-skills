@@ -30,6 +30,7 @@ DOCS = {
     "https://www.sec.gov/Archives/edgar/data/1096385/000109638510000021/ex99_1.htm": "doc_vectren_8k.html",
     "https://www.sec.gov/Archives/edgar/data/1325878/000132587822000058/fhlbt-20211231.htm": "doc_fhlb_10k.html",
     "https://www.sec.gov/Archives/edgar/data/1430162/000143016226000040/cosan-20f.htm": "doc_cosan_20f.html",
+    "https://www.sec.gov/Archives/edgar/data/999/000000099926000001/acme.htm": "doc_two_mentions.html",
 }
 CALLS: list[str] = []
 
@@ -54,8 +55,17 @@ def check(name, cond, detail=""):
 # --- pure helpers ------------------------------------------------------------
 check("boundary: 'colas s.a.' does not match inside 'agrícolas s.a.'",
       er.find_phrase(er.norm("Terra do Sol Propriedades Agrícolas S.A. 637,782"), "Colas S.A.") is None)
-check("boundary: phrase matches across a line break / whitespace run",
-      er.find_phrase(er.norm("CRH public\n  limited company (“CRH,” “CRH plc,” the"), "CRH plc") is not None)
+check("boundary: phrase matches across a line break / whitespace run INSIDE the phrase",
+      er.find_phrase(er.norm("… the registrant CRH\n   plc had the following …"), "CRH plc") is not None)
+check("NFC: composed and decomposed accents compare equal",
+      er.find_phrase(er.norm("Propriedades Agr\u0069\u0301colas"), "Agrícolas") is not None)
+check("context word 'construction' does NOT fire on 'reconstruction' (word boundary)",
+      er.grade(er.find_phrase("nebco, inc. led the reconstruction effort", "NEBCO, Inc."),
+               "nebco, inc. led the reconstruction effort", False, ["construction"], "NEBCO, Inc.")[0] == "third_party_name_only")
+check("context words contained in the phrase itself are ignored",
+      er.usable_context_words(["inc", "", "Construction"], "Rieth-Riley Construction Co., Inc.") == [])
+check("best_occurrence: an identifying sentence later in the document beats an early bare mention",
+      er.best_occurrence(er.norm(open(FX / "doc_two_mentions.html").read().replace("<p>", " ").replace("</p>", " ")), "Acme Aggregates LLC", False, ["crushed stone"])[0] == "third_party_context")
 check("grade: self-filer wins regardless of context",
       er.grade(er.find_phrase("x crh plc y", "CRH plc"), "x crh plc y", True, ["never"])[0] == "self_filing")
 check("grade: third party without context words is name-only",
@@ -84,6 +94,13 @@ check("every searched row records docs_examined (a hold is auditable)", all("doc
 md, slate = er.render_ledger(rows, "verify_alias")
 check("ledger renders one table row per candidate", md.count("\n| r-") == len(rows), str(md.count("\n| r-")))
 check("slate holds exactly the accepted rows (CRH, NEBCO)", sorted(a["raw_name"] for a in slate) == ["CRH PLC", "Nebco Inc"], json.dumps(slate)[:200])
+# acceptance predicate — the dangerous direction
+ge = dict(by["CRH PLC"]); ge["verdict"] = "group_entity"
+check("a group_entity verdict is held even with a self_filing receipt", not er.accepted(ge))
+ext = dict(by["CRH PLC"]); ext["receipt_url"] = "https://www.crh.com/investors"
+check("a non-sec.gov receipt is held even with an accepted grade", not er.accepted(ext))
+inc = dict(by["CRH PLC"]); inc.pop("doc_sha256")
+check("a row missing doc_sha256 is held", not er.accepted(inc))
 check("slate actions carry action/raw_name/target_name/source(url)/note",
       all(a["action"] == "verify_alias" and a["source"].startswith("https://www.sec.gov/") and a["target_name"] and a["note"] for a in slate))
 check("held rows never enter the slate", not any(a["raw_name"] in ("Rogers Group Inc", "Colas S A", "Mathy Construction Company") for a in slate))
@@ -92,21 +109,39 @@ check("held rows never enter the slate", not any(a["raw_name"] in ("Rogers Group
 rep = er.replay_one(by["CRH PLC"], stub_fetch)
 check("replay of a pinned receipt → replay_ok with unchanged sha", rep["replay"] == "replay_ok" and rep["sha_unchanged"] is True)
 tampered = dict(by["CRH PLC"]); tampered["phrase"] = "CRH plc of Mars"
-check("replay with a phrase the doc lacks → phrase_not_found", er.replay_one(tampered, stub_fetch)["replay"] == "phrase_not_found")
+rt = er.replay_one(tampered, stub_fetch)
+check("replay with a phrase the doc lacks → phrase_not_found AND the row is no longer accepted",
+      rt["replay"] == "phrase_not_found" and not er.accepted(rt))
+lost = dict(by["Nebco Inc"]); lost["context_words"] = ["quarry"]  # context that is not in the document any more
+rl = er.replay_one(lost, stub_fetch)
+check("replay whose identifying context is gone → grade_dropped, acceptance revoked",
+      rl["replay"] == "grade_dropped" and not er.accepted(rl), rl.get("replay"))
+_, slate_after = er.render_ledger([rt, rl, er.replay_one(by["CRH PLC"], stub_fetch)], "verify_alias")
+check("ledger after replay keeps only replay_ok rows", [a["raw_name"] for a in slate_after] == ["CRH PLC"])
 
 # --- CLI round trip (ledger mode, no network) ---------------------------------
 with tempfile.TemporaryDirectory() as td:
     p = Path(td); (p / "rows.json").write_text(json.dumps(rows))
     rc = er.main(["ledger", str(p / "rows.json"), str(p / "ledger.md"), str(p / "slate.json"), "--action", "merge_alias"])
     check("CLI ledger mode exits 0 and writes both files", rc == 0 and (p / "ledger.md").exists() and (p / "slate.json").exists())
-    check("CLI --action is honored", all(a["action"] == "merge_alias" for a in json.loads((p / "slate.json").read_text())))
+    sl = json.loads((p / "slate.json").read_text())
+    check("CLI --action is honored on a NON-EMPTY slate", len(sl) == 2 and all(a["action"] == "merge_alias" for a in sl))
+    try:
+        er.main(["ledger", str(p / "rows.json"), str(p / "ledger.md"), "--action", "delete_everything"]); check("CLI rejects an unknown --action", False)
+    except SystemExit:
+        check("CLI rejects an unknown --action", True)
 
 # --- guards ------------------------------------------------------------------
+for ua in (None, "   ", "just-a-name"):
+    try:
+        er.Fetcher(ua); check(f"Fetcher refuses EDGAR_UA={ua!r} (no contact)", False)
+    except SystemExit:
+        check(f"Fetcher refuses EDGAR_UA={ua!r} (no contact)", True)
 try:
-    er.Fetcher(None); check("Fetcher refuses to run without EDGAR_UA", False)
+    er.Fetcher("skill test (https://example.org)").get("https://www.crh.com/investors"); check("Fetcher refuses a non-sec.gov URL", False)
 except SystemExit:
-    check("Fetcher refuses to run without EDGAR_UA", True)
-check("no request left the fixture map", all(u.startswith(er.EFTS) or u in DOCS for u in CALLS))
+    check("Fetcher refuses a non-sec.gov URL", True)
+check("no request left the fixture map", all((u.startswith(er.EFTS + "?q=") and "&" not in u.split("?q=")[1].split("&forms=")[0]) or u in DOCS for u in CALLS))
 
 for p_ in passes: print("PASS", p_)
 for f_ in fails: print("FAIL", f_)
