@@ -1,0 +1,13 @@
+{
+ "CRH plc": {"hits": {"total": {"value": 3}, "hits": [
+   {"_id": "0000849395-26-000010:crh-20251231.htm", "_source": {"ciks": ["0000849395"], "display_names": ["CRH PUBLIC LTD CO  (CRH)  (CIK 0000849395)"], "form": "10-K", "file_date": "2026-02-18"}},
+   {"_id": "0001234567-25-000001:other.htm", "_source": {"ciks": ["0001234567"], "display_names": ["SOME FUND  (CIK 0001234567)"], "form": "10-K", "file_date": "2026-03-01"}}]}},
+ "Rogers Group, Inc.": {"hits": {"total": {"value": 2}, "hits": [
+   {"_id": "0000896156-26-000030:prec14a.htm", "_source": {"ciks": ["0000896156"], "display_names": ["ETHAN ALLEN INTERIORS INC  (ETD)  (CIK 0000896156)"], "form": "PREC14A", "file_date": "2026-09-04"}},
+   {"_id": "0001096385-10-000021:ex99_1.htm", "_source": {"ciks": ["0001096385"], "display_names": ["VECTREN CORP  (CIK 0001096385)"], "form": "8-K", "file_date": "2010-03-04"}}]}},
+ "NEBCO, Inc.": {"hits": {"total": {"value": 1}, "hits": [
+   {"_id": "0001325878-22-000058:fhlbt-20211231.htm", "_source": {"ciks": ["0001325878"], "display_names": ["Federal Home Loan Bank of Topeka  (CIK 0001325878)"], "form": "10-K", "file_date": "2022-03-21"}}]}},
+ "Colas S.A.": {"hits": {"total": {"value": 1}, "hits": [
+   {"_id": "0001430162-26-000040:cosan-20f.htm", "_source": {"ciks": ["0001430162"], "display_names": ["Cosan S.A.  (CSAN)  (CIK 0001430162)"], "form": "20-F", "file_date": "2026-04-10"}}]}},
+ "Mathy Construction Company": {"hits": {"total": {"value": 0}, "hits": []}}
+}

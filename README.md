@@ -14,6 +14,7 @@ A portable, restorable backup of locally-authored [Claude Code](https://docs.cla
 | **plan-pressure-test** | Pressure-tests a product idea / feature / plan before build effort: six forcing questions (demand-reality, status-quo, desperate-specificity, narrowest-wedge, observation, future-fit) → one of four scope modes; surfaces only genuine taste decisions to the operator. Adapts gstack's interrogation structure; see [`NOTICE.md`](NOTICE.md). |
 | **video-ingest** | Ingests a video (usually YouTube) into an Obsidian-format vault as durable knowledge — clean timestamped transcript bundle, distilled review note, and receipts-backed improvement recommendations gated by a mandatory cross-model panel. Orchestrates the `watch` skill as its video engine; idempotent per canonical video id across URL variants. |
 | **codebase-memory** | Queries a persistent local code knowledge graph via the `codebase-memory-mcp` CLI (no MCP server registered — token-light): call graphs, "what calls X", impact tracing, structural search, openCypher queries over indexed repos. |
+| **edgar-receipts** | Verifies that a company-name string names a specific organization using SEC EDGAR filings as machine-replayable receipts: full-text search → newest self-filing → Unicode-word-boundary phrase replay + sha256 → grade (`self_filing` / `third_party_context` / `third_party_name_only` / `phrase_not_found` / `no_hit`) → ledger + actions slate. Only self-filings and context-bearing third-party sentences are accepted; namesakes and name-only mentions are held. |
 
 ## Restore
 
@@ -30,6 +31,7 @@ Then per skill:
 - **session-recall** scripts are Python 3 stdlib-only and bash 3.2 compatible.
 - **video-ingest** depends on the third-party `watch` skill (bradautomates/claude-video — install and vet it separately; it is not authored here and not bundled) plus `yt-dlp` and `ffmpeg` on `PATH`, and writes into an Obsidian-format vault (folder conventions documented in the SKILL.md).
 - **codebase-memory** expects the `codebase-memory-mcp` binary on `PATH`; bound indexing with `CBM_ALLOWED_ROOT` (least privilege) and index each repo once before querying.
+- **edgar-receipts** is Python 3 stdlib-only; set `EDGAR_UA` to a descriptive User-Agent with a contact (SEC fair-access policy) — the script refuses to fetch without it. Receipts come from `sec.gov` only by design.
 
 ## Provenance & licensing
 

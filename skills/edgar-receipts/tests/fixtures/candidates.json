@@ -1,0 +1,7 @@
+[
+ {"raw_name": "CRH PLC", "org_name": "CRH", "phrase": "CRH plc", "forms": "10-K", "self_filer_token": "crh", "verdict": "same_entity", "note": "registrant's own 10-K"},
+ {"raw_name": "Rogers Group Inc", "org_name": "Rogers Group, Inc.", "phrase": "Rogers Group, Inc.", "context_words": ["aggregate", "crushed stone", "quarr"], "verdict": "same_entity"},
+ {"raw_name": "Nebco Inc", "org_name": "NEBCO, Inc.", "phrase": "NEBCO, Inc.", "context_words": ["construction", "concrete"], "verdict": "same_entity"},
+ {"raw_name": "Colas S A", "org_name": "Colas", "phrase": "Colas S.A.", "verdict": "same_entity"},
+ {"raw_name": "Mathy Construction Company", "org_name": "Mathy Construction", "phrase": "Mathy Construction Company", "verdict": "same_entity"}
+]
