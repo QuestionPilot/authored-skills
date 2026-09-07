@@ -37,7 +37,46 @@ cli=""
 canonical="$OPERATOR_HOME/.claude/skills"
 mirrors="$OPERATOR_HOME/.codex/skills:$OPERATOR_HOME/.agents/skills:$CURSOR_HOME/skills"
 overlay="$OPERATOR_HOME/local.skills-overlay.md"
+# _os_localenv_get <path> <key> — read one KEY=VALUE from local.env as DATA
+# (never sourced; a hostile or malformed local.env cannot execute). Verbatim copy
+# of scripts/operator-skill-parity-check.sh::_sp_localenv_get: strips an optional
+# `export `, one matching outer quote pair, backslash escapes; last assignment
+# wins. No $VAR expansion.
+_os_localenv_get() {
+  local path="$1" key="$2" line t v f l inner result=""
+  [ -f "$path" ] || { printf '%s' ""; return 0; }
+  while IFS= read -r line || [ -n "$line" ]; do
+    t="${line#"${line%%[![:space:]]*}"}"
+    t="${t%"${t##*[![:space:]]}"}"
+    [ -z "$t" ] && continue
+    case "$t" in '#'*) continue ;; esac
+    case "$t" in
+      export[[:space:]]*) t="${t#export}"; t="${t#"${t%%[![:space:]]*}"}" ;;
+    esac
+    case "$t" in
+      "$key="*) v="${t#"$key="}" ;;
+      *) continue ;;
+    esac
+    if [ "${#v}" -ge 2 ]; then
+      f="${v:0:1}"; l="${v:$(( ${#v} - 1 )):1}"
+      if { [ "$f" = '"' ] && [ "$l" = '"' ]; } || { [ "$f" = "'" ] && [ "$l" = "'" ]; }; then
+        inner=$(( ${#v} - 2 )); v="${v:1:$inner}"
+      else
+        case "$v" in
+          *'\'*) v="$(printf '%s' "$v" | sed -E 's/\\(.)/\1/g')" ;;
+        esac
+      fi
+    fi
+    result="$v"
+  done < "$path"
+  printf '%s' "$result"
+}
+
+# Vault root: env first, then local.env read as data (agent shells source only
+# ~/.zshenv, which does not export OBSIDIAN_VAULT_PATH — 2026-09-07, QUE-650),
+# then --vault.
 vault="${OBSIDIAN_VAULT_PATH:-}"
+[ -n "$vault" ] || vault="$(_os_localenv_get "${AI_CONFIG_LOCAL_ENV:-$OPERATOR_HOME/local.env}" OBSIDIAN_VAULT_PATH)"
 guide_name=""
 skip_vault=0
 
@@ -174,7 +213,7 @@ if [ "$skip_vault" -eq 1 ]; then
   skip "vault-guide" "--skip-vault"
   skip "capability-map-row" "--skip-vault"
 elif [ -z "$vault" ] || [ ! -d "$vault" ]; then
-  bad "vault-guide" "vault root not found (pass --vault or set OBSIDIAN_VAULT_PATH)"
+  bad "vault-guide" "vault root not found (pass --vault, set OBSIDIAN_VAULT_PATH, or declare it in local.env)"
   bad "capability-map-row" "vault root not found"
 else
   # Match the guide on the tool name, and on its hyphens-as-spaces form, so
