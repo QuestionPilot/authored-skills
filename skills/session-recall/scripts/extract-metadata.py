@@ -113,7 +113,8 @@ def cwd_matches(cwd, filt):
     """Strict, path-component-aware match. Returns True only when `cwd` is
     non-empty AND `filt` matches it as a full path, a path-suffix, or a single
     path component. A bare repo name ("myrepo") matches
-    "/Users/x/projects/myrepo"; it does NOT match "/x/my-myrepo-fork"
+    "/fixture-root/session-recall/projects/myrepo"; it does NOT match
+    "/fixture-root/session-recall/projects/my-myrepo-fork"
     (that is a substring, not a component) — fixing CE's substring over-match.
     Case-insensitive (macOS paths are typically case-insensitive). NOTE: matching
     any path component means an overly-generic filter ("projects", "src", a
