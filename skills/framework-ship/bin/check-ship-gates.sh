@@ -261,7 +261,7 @@ check_log() {
   # Line-start only: the framework suites emit real failures as "FAIL <detail>"
   # (optionally indented), while PASSing test titles may contain the word FAIL
   # mid-line ("PASS commit-identity: FAIL names the author field") — first live
-  # run (QUE-562) tripped 23 such false positives under the old any-position match.
+  # run tripped 23 such false positives under the old any-position match.
   _fails=$(grep -c -E '^[[:space:]]*FAIL([^A-Za-z]|$)' "$_path" 2>/dev/null)
   [ -n "$_fails" ] || _fails=0
   _marks=$(grep -c -F -- "$_marker" "$_path" 2>/dev/null)

@@ -85,7 +85,7 @@ right prefix, `uv tool`). Skill bundle → copy the reviewed files **verbatim**
 into the canonical skills root by hand:
 
 ```bash
-cp -R "<vetted-source>/<name>" "/Users/hendohome/Agentic OS/.claude/skills/<name>"
+cp -R "<vetted-source>/<name>" "$AI_CONFIG_DIR/.claude/skills/<name>"
 ```
 
 Modify only where step 2 said to (trim, fix stale paths, scope the trigger) —
@@ -101,8 +101,8 @@ reproducible from the vault guide.
 `SKILLS.md`:
 
 ```bash
-$EDITOR "/Users/hendohome/Agentic OS/local.skills-overlay.md"   # name | trigger | use when
-cd "/Users/hendohome/Agentic OS" && bash scripts/install.sh --harness claude --harness codex
+$EDITOR "$AI_CONFIG_DIR/local.skills-overlay.md"   # name | trigger | use when
+cd "$AI_CONFIG_DIR" && bash scripts/install.sh --harness claude --harness codex
 bash scripts/check-drift.sh --auto
 ```
 
@@ -112,7 +112,7 @@ bash scripts/check-drift.sh --auto
 **5. Mirror.** Copy the placed skill, content-identical, to every operator skill
 root — canonical `.claude/skills/`, mirrors `.codex/skills/`, `.agents/skills/`,
 `~/.cursor/skills/`. Hermes is deliberately out of scope. *Done when:* the parity
-gate `bash "/Users/hendohome/Agentic OS/scripts/operator-skill-parity-check.sh"` PASSES.
+gate `bash "$AI_CONFIG_DIR/scripts/operator-skill-parity-check.sh"` PASSES.
 
 **6. Vault.** Write or update the tool's guide in `10-Wiki/Entities/` (what it
 is, install command, auth, the vet verdict + tier, version/hash anchor, any
@@ -120,7 +120,7 @@ deviation from upstream), add the Capability Map row in `90-Indexes/`, then from
 the vault root:
 
 ```bash
-node bin/generate-harness-index.js && node bin/hendo-vault-audit.js
+node bin/generate-harness-index.js && node bin/<vault-audit-script>.js
 ```
 
 *Done when:* the guide carries the vet verdict, the map row names the tool, and

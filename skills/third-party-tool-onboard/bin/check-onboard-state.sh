@@ -73,7 +73,7 @@ _os_localenv_get() {
 }
 
 # Vault root: env first, then local.env read as data (agent shells source only
-# ~/.zshenv, which does not export OBSIDIAN_VAULT_PATH — 2026-09-07, QUE-650),
+# ~/.zshenv, which does not export OBSIDIAN_VAULT_PATH — 2026-09-07),
 # then --vault.
 vault="${OBSIDIAN_VAULT_PATH:-}"
 [ -n "$vault" ] || vault="$(_os_localenv_get "${AI_CONFIG_LOCAL_ENV:-$OPERATOR_HOME/local.env}" OBSIDIAN_VAULT_PATH)"

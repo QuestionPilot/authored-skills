@@ -8,7 +8,7 @@ must-fire rule lives inline in `SKILL.md` (skill-authoring §3).
 The procedure is not synthesized — it is the transcript of runs that already
 worked:
 
-- **21st.dev CLI adoption, 2026-07-06 (QUE-377 session).** The full shape ran
+- **21st.dev CLI adoption, 2026-07-06.** The full shape ran
   once end to end: source review → intake vet → manual placement of the skill
   bundles → overlay row + re-render → mirrors → vault guide + Capability Map →
   live smoke test. It is also the run that produced the standard's sharpest
@@ -16,7 +16,7 @@ worked:
   and nothing at the harness layer surfaced it during an install-shaped task.
   The vet only ran because an unrelated guide mentioned it — and by then the
   files were already placed. This skill exists to make that recall automatic.
-- **Operator toolkit workstream, 2026-06-21/22 (QUE-322).** The same shape at
+- **Operator toolkit workstream, 2026-06-21/22.** The same shape at
   volume — roughly 13 tools onboarded in one arc, which is where the repeatable
   ordering (review → vault guide → install, never install-first) and the
   "install full functionality, no silent skips" rule were settled.

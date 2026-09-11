@@ -14,7 +14,7 @@ python3 video-ingest/tests/run_fixtures.py
 video-ingest fixture suite (structural assertions)
 ====================================================================
 
-Fixture 1 — provenance (QUE-436 rolling auto-captions)
+Fixture 1 — provenance (rolling auto-captions)
   PASS  f1: clean script exits 0
   PASS  f1: raw rolling segments in ~345 band [330,360]  (deduped_lines=346)
   PASS  f1: dedup collapses rolling overlap (raw_text_lines > 2x deduped)  (raw_text_lines=1035 deduped=346)

@@ -36,11 +36,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+# Vault tag namespace for raw source bundles (operator-configurable; keeps
+# machine/operator names out of the shipped script).
+_TAG_PREFIX = os.environ.get("VIDEO_INGEST_TAG_PREFIX", "vault")
 
 # ---- canonical key ----------------------------------------------------------
 
@@ -214,7 +219,7 @@ def render_readme(meta: dict, slug: str, key: str, files: list[str]) -> str:
     return f"""---
 title: "{title} (source bundle)"
 tags:
-  - hendo-vault/raw
+  - {_TAG_PREFIX}/raw
   - source/youtube
 source: "{webpage}"
 dedup_key: "{key}"

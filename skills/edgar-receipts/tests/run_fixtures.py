@@ -2,7 +2,7 @@
 """
 run_fixtures.py — structural fixture tests for the edgar-receipts skill (offline).
 
-The fixtures are the sentence shapes the 2026-09-06 QUE-632 run actually met:
+The fixtures are the sentence shapes the 2026-09-06 run actually met:
 a registrant's own 10-K cover, a namesake consulting firm, a name-only board
 biography, an industry-identifying biography, a substring false positive, and
 a zero-hit search. A stub fetcher serves them; any URL outside the fixture map

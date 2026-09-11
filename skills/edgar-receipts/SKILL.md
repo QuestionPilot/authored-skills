@@ -26,7 +26,7 @@ context revokes it. `python3 tests/run_fixtures.py` is green.
 ## Why the grade is the product
 
 A receipt that merely *contains* the name does not verify an alias. On 2026-09-06
-(QUE-632) a bare phrase search accepted "Peppers and Rogers Group, Inc." (a consulting
+a bare phrase search accepted "Peppers and Rogers Group, Inc." (a consulting
 firm) for an aggregates producer, a Portland auto-dealer "Rasmussen Group" for an Iowa
 materials company, and "agrícolas S.A." as a substring hit for "Colas S.A."; the
 critic then held five more rows whose only evidence was a director biography. The

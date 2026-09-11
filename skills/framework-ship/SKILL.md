@@ -12,7 +12,7 @@ SKILL.md>` below.
 
 ## Hard invariants (these never bend)
 
-- **Never `git push` from the living folder** `/Users/hendohome/Agentic OS`. It is
+- **Never `git push` from the living folder** the local framework checkout (`$AI_CONFIG_DIR`). It is
   a clone of the public template; all upstream writes go through a **throwaway
   clone**. Ref deletions included — no exemption. Pulling into the living folder
   is fine.
@@ -121,7 +121,7 @@ The marker flags are load-bearing: the gate's default marker is the literal
 `PASSED`, which matches NEITHER `make verify`'s output (its final gate prints
 `PASS drift and portability checks`) nor check-clean's summary
 (`PASS check-clean: …`) — omit them and both log gates FAIL on a green run
-(first live run, QUE-562). If either summary line ever changes wording, update
+(first live run). If either summary line ever changes wording, update
 the flag values here rather than the gate script.
 
 The script checks branch-not-default, worktree-clean, commit-identity (author +

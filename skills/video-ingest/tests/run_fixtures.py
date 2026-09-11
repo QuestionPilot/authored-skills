@@ -3,7 +3,7 @@
 run_fixtures.py — structural fixture tests for the video-ingest skill.
 
 Runs the two NON-OPTIONAL trust-contract fixtures plus the dedup-key and
-partial-run-recovery checks the QUE-440 acceptance criteria name. All assertions
+partial-run-recovery checks the acceptance criteria name. All assertions
 are STRUCTURAL (counts, monotonicity, membership) not byte-exact prose matches
 (skill-authoring principle 4), so benign caption regeneration by YouTube does not
 break the suite — the invariants the pipeline promises are what is asserted.
@@ -44,11 +44,11 @@ def run(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-# --- Fixture 1: provenance (QUE-436 rolling auto-captions) --------------------
+# --- Fixture 1: provenance (rolling auto-captions) ----------------------------
 
 
 def fixture1_provenance() -> None:
-    print("\nFixture 1 — provenance (QUE-436 rolling auto-captions)")
+    print("\nFixture 1 — provenance (rolling auto-captions)")
     vtt = next(FIXTURES.glob("fixture1_rolling_autocaptions_*.vtt"))
     proc = run(str(CLEAN), "--stats", str(vtt))
     check("f1: clean script exits 0", proc.returncode == 0, proc.stderr.strip())

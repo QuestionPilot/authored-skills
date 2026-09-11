@@ -103,9 +103,11 @@ raw bundle → sources manifest row → **wiki note staged in scratch, validated
 then moved into the vault** → wiki index row → **regenerate the harness index**
 (`node bin/generate-harness-index.js` — a new `10-Wiki/Sources` note drifts all
 three `90-Indexes/Harness Index - <h>` views; skip it and the audit FAILs on
-drift) → `node bin/hendo-vault-audit.js`.
+drift) → the vault audit script (e.g. `node bin/<vault-audit-script>.js`).
 Build the bundle README with
 `python3 scripts/bundle.py readme --meta-json META.json --slug SLUG --files ...`.
+The raw-bundle tag namespace is `VIDEO_INGEST_TAG_PREFIX` (default `vault`, giving
+`vault/raw`); set it to match your vault's tag convention.
 Full transcript lives in **Raw only**; the wiki note summarizes and links
 (Fresh Start Policy), quoting sparingly (Guard 4). This exact order is what makes
 a partial run resumable rather than corrupting (dedup in Stage 1 catches the
@@ -181,12 +183,12 @@ the reconciliation under `$CROSS_MODEL_OUT_DIR/<date>-<slug>/reconciled.md`.
 Only the **reconciled** set is presented. A recommendation without its search
 receipts — or not yet through the panel — is not presentable. **The operator
 approves each recommendation. The skill NEVER auto-files a Linear issue** — each
-adopted rec becomes its own issue the operator files (the QUE-436 scope rule;
+adopted rec becomes its own issue the operator files (scope rule;
 implementing recs is out of scope here).
 
 ### 7. Closeout hygiene
 Delete the `/watch` working dir (`rm -rf "$WORKDIR"`). Leave an evidence comment on
-the invoking issue: vault paths written, `hendo-vault-audit` result, the **panel
+the invoking issue: vault paths written, vault audit result, the **panel
 outcome** (what it changed vs confirmed, with the `reconciled.md` path), and run
 token cost.
 

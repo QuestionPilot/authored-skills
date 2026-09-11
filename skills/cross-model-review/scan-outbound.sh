@@ -56,7 +56,7 @@ scan_outbound() {
 
   # High-entropy hex is the one pattern git patch packets legitimately trip:
   # commit/index/From/Merge header lines carry 40-64-hex object hashes, so
-  # every git-show packet failed closed (QUE-367). The hex pattern therefore
+  # every git-show packet failed closed. The hex pattern therefore
   # scans a view of the input with full-line-anchored header shapes removed.
   # Anything appended to a header line (even one character) breaks the ^...$
   # anchor and the line stays scanned; every credential-prefix pattern still

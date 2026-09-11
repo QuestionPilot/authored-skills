@@ -2,10 +2,10 @@
 
 ## Provenance (skill-authoring §11 step 1)
 
-Promoted from the Rock Sources QUE-632 lane (2026-09-06): 40 MSHA controller strings
+Promoted from a source-verification lane (2026-09-06): 40 MSHA controller strings
 whose organizations were created from those very strings; the task was to verify each
 string as an alias of its organization with a public receipt so the parent label could
-return to the live map under the QUE-531 privacy rule.
+return to the live map under the project privacy rule.
 
 The flow ran three times in that session — a first discovery pass (26 replay_ok, two
 namesakes and one substring hit slipped through), a tightened pass (Unicode word
@@ -13,8 +13,8 @@ boundary, newest self-filing first), and a pinned-receipt replay plus a
 context-strengthening pass after an adversarial critic (Astra) held six rows. Final:
 20 accepted / 20 held, applied to the registry under an operator decision, released and
 live-verified (`owner_labelled` 1,250 → 2,267). Raw scripts and outputs of that run:
-`~/cross-model-out/2026-09-06-que632-alias-receipts/{scripts,outputs}/`; ledger:
-`rocksources/docs/org-alias-receipts-2026-09-06.md`.
+the operator's local cross-model run directory for 2026-09-06 (not shipped); ledger:
+the project's `docs/org-alias-receipts-2026-09-06.md` (private repo).
 
 ## What the fixtures encode
 

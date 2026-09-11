@@ -10,13 +10,8 @@ procedure, run to a green end state **7+ times** before promotion:
 
 | Session | Notes |
 |---|---|
-| QUE-360 | early run of the throwaway-clone → PR shape |
-| QUE-362 | " |
-| QUE-365 | " |
-| QUE-366 | " |
-| QUE-370 | " |
-| QUE-371 | latest pair, shipped as **PR #87** |
-| QUE-375 | latest pair, shipped as **PR #88** |
+| runs 1–5 | early runs of the throwaway-clone → PR shape |
+| runs 6–7 | latest pair, shipped as **PR #87** and **PR #88** |
 
 Repeatability, not a single lucky run, is what makes this promotable. A future
 session that changes a stage should be able to name the run that motivated it.

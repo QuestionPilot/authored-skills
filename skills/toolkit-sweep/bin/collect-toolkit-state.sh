@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # collect-toolkit-state.sh — deterministic installed-state collector for the
-# manual toolkit sweep (QUE-589). Read-only: never installs, updates, or
+# manual toolkit sweep. Read-only: never installs, updates, or
 # deletes. Network use is limited to package-registry staleness queries
 # (brew/npm outdated); everything else is local. Emits a markdown report to
 # stdout; every section prints its denominator so an empty section reads as
