@@ -26,19 +26,19 @@ trap 'rm -rf "$TMP"' EXIT
 
 # --- Build a fake relocated Claude config with a SPACE-encoded project dir ---
 CFG="$TMP/Space Dir/claude-config"
-SPACED="$CFG/projects/-Users-x-Space-Dir-projects-myrepo"
+SPACED="$CFG/projects/-fixture-root-session-recall-Space-Dir-projects-myrepo"
 mkdir -p "$SPACED"
 cat > "$SPACED/space.jsonl" <<'J'
-{"type":"user","gitBranch":"main","cwd":"/Users/x/Space Dir/projects/myrepo","timestamp":"2026-06-03T10:00:00Z","sessionId":"spaced-1","message":{"role":"user","content":"work on the myrepo importer pipeline today"}}
+{"type":"user","gitBranch":"main","cwd":"/fixture-root/session-recall/Space Dir/projects/myrepo","timestamp":"2026-06-03T10:00:00Z","sessionId":"spaced-1","message":{"role":"user","content":"work on the myrepo importer pipeline today"}}
 J
 # A second project dir whose cwd is a SUBSTRING-but-not-component of "myrepo"
-SUBDIR="$CFG/projects/-Users-x-projects-my-myrepo-fork"
+SUBDIR="$CFG/projects/-fixture-root-session-recall-projects-my-myrepo-fork"
 mkdir -p "$SUBDIR"
 cat > "$SUBDIR/sub.jsonl" <<'J'
-{"type":"user","gitBranch":"main","cwd":"/Users/x/projects/my-myrepo-fork","timestamp":"2026-06-03T11:00:00Z","sessionId":"subfork-1","message":{"role":"user","content":"unrelated fork work"}}
+{"type":"user","gitBranch":"main","cwd":"/fixture-root/session-recall/projects/my-myrepo-fork","timestamp":"2026-06-03T11:00:00Z","sessionId":"subfork-1","message":{"role":"user","content":"unrelated fork work"}}
 J
 # A Claude session with NO cwd field (strict filter must drop it when scoping)
-NOCWD="$CFG/projects/-Users-x-projects-nocwd"
+NOCWD="$CFG/projects/-fixture-root-session-recall-projects-nocwd"
 mkdir -p "$NOCWD"
 cat > "$NOCWD/nocwd.jsonl" <<'J'
 {"type":"user","gitBranch":"main","timestamp":"2026-06-03T12:00:00Z","sessionId":"nocwd-1","message":{"role":"user","content":"session with no cwd recorded"}}
@@ -53,7 +53,7 @@ meta="$(CLAUDE_CONFIG_DIR="$CFG" bash "$DISC" 3650 --platform claude --exclude-a
         | tr '\n' '\0' | xargs -0 python3 "$META" --cwd-filter myrepo)"
 check "cwd-filter keeps space-path myrepo session" "spaced-1" "$meta"
 
-# 3. path-component match: 'myrepo' must NOT match '/x/projects/my-myrepo-fork'
+# 3. path-component match: 'myrepo' must NOT match the fixture fork path.
 case "$meta" in *subfork-1*) bad "path-component: substring fork wrongly kept" ;; *) ok "path-component drops my-myrepo-fork (not a substring match)" ;; esac
 
 # 4. strict missing-cwd: a no-cwd session is dropped when a filter is active
@@ -68,10 +68,10 @@ check "all-repos scan returns no-cwd session" "nocwd-1" "$allmeta"
 # NOTE: CODEX_HOME/AGENTS_DIR must be pinned in every discovery invocation —
 # the script honors them (and falls back to the REAL local.env via its own
 # path), so an unpinned run would leak the operator's live sessions in.
-CODEXBASE="$TMP/home/.codex/sessions/2026/06/03"
+CODEXBASE="$TMP/test-profile/.codex/sessions/2026/06/03"
 mkdir -p "$CODEXBASE"
 cp "$FIX/codex-session.jsonl" "$CODEXBASE/rollout-test.jsonl"
-cout="$(HOME="$TMP/home" CODEX_HOME="$TMP/home/.codex" AGENTS_DIR="$TMP/home/.agents" \
+cout="$(HOME="$TMP/test-profile" CODEX_HOME="$TMP/test-profile/.codex" AGENTS_DIR="$TMP/test-profile/.agents" \
         bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
 check "discovery recurses Codex date-nesting" "rollout-test.jsonl" "$cout"
 
@@ -79,19 +79,19 @@ check "discovery recurses Codex date-nesting" "rollout-test.jsonl" "$cout"
 RELOC="$TMP/Reloc Dir/.codex/sessions/2026/06/04"
 mkdir -p "$RELOC"
 cp "$FIX/codex-session.jsonl" "$RELOC/rollout-reloc.jsonl"
-rout="$(HOME="$TMP/nohome" CODEX_HOME="$TMP/Reloc Dir/.codex" AGENTS_DIR="$TMP/nohome/.agents" \
+rout="$(HOME="$TMP/empty-profile" CODEX_HOME="$TMP/Reloc Dir/.codex" AGENTS_DIR="$TMP/empty-profile/.agents" \
         bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
 check "relocated CODEX_HOME (space path) discovered" "rollout-reloc.jsonl" "$rout"
 
 # 6c. Dedup: CODEX_HOME pointing at the stock $HOME/.codex emits each file once
-dup="$(HOME="$TMP/home" CODEX_HOME="$TMP/home/.codex" AGENTS_DIR="$TMP/home/.agents" \
+dup="$(HOME="$TMP/test-profile" CODEX_HOME="$TMP/test-profile/.codex" AGENTS_DIR="$TMP/test-profile/.agents" \
        bash "$DISC" 3650 --platform codex --exclude-active-min 0 | grep -c 'rollout-test.jsonl' || true)"
 case "$dup" in 1) ok "dedup: CODEX_HOME==\$HOME/.codex emits once" ;; *) bad "dedup: expected 1 emission, got '$dup'" ;; esac
 
 # 6d. local.env fallback: CODEX_HOME empty in env, declared in a fake local.env
 FR="$TMP/fakerepo"; mkdir -p "$FR"
 printf "CODEX_HOME='%s'\n" "$TMP/Reloc Dir/.codex" > "$FR/local.env"
-lout="$(HOME="$TMP/nohome" CODEX_HOME= AGENTS_DIR= CLAUDE_CONFIG_DIR= AI_CONFIG_DIR="$FR" \
+lout="$(HOME="$TMP/empty-profile" CODEX_HOME= AGENTS_DIR= CLAUDE_CONFIG_DIR= AI_CONFIG_DIR="$FR" \
         bash "$DISC" 3650 --platform codex --exclude-active-min 0)"
 check "local.env fallback resolves relocated CODEX_HOME" "rollout-reloc.jsonl" "$lout"
 
@@ -127,7 +127,7 @@ if bash "$DISC" >/dev/null 2>&1; then bad "missing days should exit non-zero"; e
 # 11. scan-past-preamble: 40 noise lines before the user metadata line
 BIG="$TMP/big.jsonl"
 i=0; while [ $i -lt 40 ]; do printf '{"type":"queue-operation","operation":"noise","n":%d}\n' "$i" >> "$BIG"; i=$((i+1)); done
-printf '{"type":"user","gitBranch":"feat/x","cwd":"/Users/x/projects/deep","timestamp":"2026-06-04T10:00:00Z","sessionId":"deep-1","message":{"role":"user","content":"deep preamble session"}}\n' >> "$BIG"
+printf '{"type":"user","gitBranch":"feat/x","cwd":"/fixture-root/session-recall/projects/deep","timestamp":"2026-06-04T10:00:00Z","sessionId":"deep-1","message":{"role":"user","content":"deep preamble session"}}\n' >> "$BIG"
 big="$(python3 "$META" "$BIG")"
 check "scan-past-preamble detects user line beyond 25" "deep-1" "$big"
 
